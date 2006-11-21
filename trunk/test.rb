@@ -1,6 +1,6 @@
 #! /usr/bin/ruby
 
-require('webapi')
+require('webapi/rest')
 require('accounts')
 
 include WebAPI
