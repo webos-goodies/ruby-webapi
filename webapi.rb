@@ -96,7 +96,7 @@ class REST
 
   def initialize(protocol, auth = nil)
     @protocol = protocol
-    @auth     = auth ? auth : public
+    @auth     = auth ? auth : REST.public
   end
 
   def get(path, params = {})
