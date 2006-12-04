@@ -2,7 +2,7 @@
 
 module WebAPI
 
-  class JsonParser
+  class Json
 
     # error codes
     ParseError = :parse_error
@@ -14,10 +14,10 @@ module WebAPI
 
     # regexp
     StringPattern = /^\"((\\.|[^\"\\])*)\"/m
-    IntPattern    = /^[-+]?\d+$/
-    FloatPattern  = /^[-+]?\d*([.eE][-+]?\d+|\.\d+[eE][-+]?\d+)$/
+    IntPattern    = /^[-+]?\d+/
+    FloatPattern  = /^[-+]?\d*([.eE][-+]?\d+|\.\d+[eE][-+]?\d+)/
     EscapePattern = /\\([\"\\\/bfnrt]|u[0-9a-fA-F]{4})/
-    TokenPattern  = /\S+/
+    TokenPattern  = /[^\s\[\]{},:]+/
 
     # single character tokens
     TokenLetters = '{}[],:'
@@ -84,7 +84,6 @@ module WebAPI
     def lex(str)
       @tokens = ''
       @values = []
-      str = str.clone
       until (str = str.lstrip).empty?
         if token = TokenLetters[str[0,1]]
           @tokens << token[0]
@@ -104,9 +103,9 @@ module WebAPI
           elsif token == 'null'
             add_value(null)
           elsif IntPattern === token
-            add_value($0.to_i)
+            add_value($&.to_i)
           elsif FloatPattern === token
-            add_value($0.to_f)
+            add_value($&.to_f)
           else
             handle_error(ParseError)
           end
@@ -184,7 +183,8 @@ module WebAPI
     end
 
     def parse(str)
-      lex(str)
+      s = str.to_s
+      lex(s.equal?(str) ? s.clone : s)
       result = build()
       @tokens = nil
       @token_index = 0
@@ -195,23 +195,7 @@ module WebAPI
 
   end
 
+  class Json
+  end
+
 end
-
-require 'open-uri'
-require 'nkf'
-
-src = ''
-open('http://del.icio.us/feeds/json/hokousya?raw') do |file|
-  src = file.read
-end
-
-parser = WebAPI::JsonParser.new
-json = parser.parse(src)
-
-out = ''
-json.each do |item|
-  out += "name : #{item['d']}\n"
-  out += "url : #{item['u']}\n\n"
-end
-
-print NKF.nkf('-s', out)
