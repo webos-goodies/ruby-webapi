@@ -16,8 +16,9 @@ module WebAPI
     StringPattern = /^\"((\\.|[^\"\\])*)\"/m
     IntPattern    = /^[-+]?\d+/
     FloatPattern  = /^[-+]?\d*([.eE][-+]?\d+|\.\d+[eE][-+]?\d+)/
-    EscapePattern = /\\([\"\\\/bfnrt]|u[0-9a-fA-F]{4})/
+    EscSeqPattern = /\\([\"\\\/bfnrt]|u[0-9a-fA-F]{4})/
     TokenPattern  = /[^\s\[\]{},:]+/
+    EscapePattern = /[^\x20-\x21\x23-\x5b\x5d-\xff]/
 
     # single character tokens
     TokenLetters = '{}[],:'
@@ -34,6 +35,7 @@ module WebAPI
       @value_index = 0
     end
 
+    # JSON Parser
     def add_value(value)
       @tokens << 'v'[0]
       @values << value
@@ -49,7 +51,7 @@ module WebAPI
     end
 
     def unescape(str)
-      str.gsub(EscapePattern) do
+      str.gsub(EscSeqPattern) do
         if $1.length == 1
           $1.tr(EscapeSrc, EscapeDst)
         else
@@ -124,12 +126,12 @@ module WebAPI
       token
     end
 
-    def build_value()
+    def parse_value()
       case get_token()
       when '{'[0]
-        build_object()
+        parse_object()
       when '['[0]
-        build_array()
+        parse_array()
       when 'v'[0], 's'[0]
         value = @values[@value_index]
         @value_index += 1
@@ -139,11 +141,11 @@ module WebAPI
       end
     end
 
-    def build_array()
+    def parse_array()
       value = []
       if peek_token() != ']'[0]
         while true
-          value << build_value()
+          value << parse_value()
           break if peek_token() == ']'[0]
           handle_error(ParseError) if get_token() != ','[0]
         end
@@ -152,7 +154,7 @@ module WebAPI
       value
     end
 
-    def build_object()
+    def parse_object()
       value = {}
       if peek_token() != '}'[0]
         while true
@@ -160,7 +162,7 @@ module WebAPI
           label = @values[@value_index]
           @value_index += 1
           handle_error(ParseError) if get_token() != ':'[0]
-          value[label] = build_value()
+          value[label] = parse_value()
           break if peek_token() == '}'[0]
           handle_error(ParseError) if get_token() != ','[0]
         end
@@ -169,23 +171,20 @@ module WebAPI
       value
     end
 
-    def build()
-      @token_index = 0
-      @value_index = 0
-      token = get_token()
-      if token == '['[0]
-        build_array()
-      elsif token == '{'[0]
-        build_object()
-      else
-        handle_error(ParseError)
-      end
-    end
-
     def parse(str)
       s = str.to_s
       lex(s.equal?(str) ? s.clone : s)
-      result = build()
+      @token_index = 0
+      @value_index = 0
+      token  = get_token()
+      result = ''
+      if token == '['[0]
+        result = parse_array()
+      elsif token == '{'[0]
+        result = parse_object()
+      else
+        handle_error(ParseError)
+      end
       @tokens = nil
       @token_index = 0
       @values = nil
@@ -193,9 +192,49 @@ module WebAPI
       result
     end
 
-  end
+    # JSON Builder
+    def escape(str)
+      str.gsub(EscapePattern) do |chr|
+        if chr[0] != 0 && (index = EscapeDst.index(chr[0]))
+          "\\" + EscapeSrc[index, 1]
+        else
+          sprintf("\\u%04x", chr[0])
+        end
+      end
+    end
 
-  class Json
+    def build_value(obj)
+      if obj.is_a?(Numeric)
+        obj.to_s
+      elsif obj.is_a?(Array)
+        build_array(obj)
+      elsif obj.is_a?(Hash)
+        build_object(obj)
+      else
+        '"' + escape(obj.to_s) + '"'
+      end
+    end
+
+    def build_array(obj)
+      '[' + obj.map { |item| build_value(item) }.join(',') + ']'
+    end
+
+    def build_object(obj)
+      '{' + obj.map do |item|
+        "#{build_value(item[0].to_s)}:#{build_value(item[1])}"
+      end.join(',') + '}'
+    end
+
+    def build(obj)
+      if obj.is_a?(Array)
+        build_array(obj)
+      elsif obj.is_a?(Hash)
+        build_object(obj)
+      else
+        build_array([obj])
+      end
+    end
+
   end
 
 end
