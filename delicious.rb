@@ -72,9 +72,19 @@ module WebAPI
       @rest     = REST.new(protocol, auth)
     end
 
-    def posts(max_length, *tags)
+    def get_posts(opt = {})
+      get_posts_json(opt)
+    end
+
+    def get_tags()
+      get_tags_json()
+    end
+
+    def get_posts_json(opt)
+      tags = opt['tags'] ? opt['tags'] : []
+      count = opt['count'] ? opt['count'] : 100
       url = '/feeds/json/' + @rest.urlencode(@username + '/' + tags.join(' '))
-      params = { 'count' => max_length, 'raw' => '' }
+      params = { 'count' => count, 'raw' => '' }
       response = @rest.get(url, params)
       json = Json.new.parse(response)
       json.map! do |post|
@@ -82,10 +92,9 @@ module WebAPI
       end
     end
 
-    def tags(threshold = 1, max_length = nil)
+    def get_tags_json()
       url = '/feeds/json/tags/' + @rest.urlencode(@username)
-      params = { 'atleast' => threshold, 'raw' => '' }
-      params['count'] = max_length if max_length
+      params = { 'atleast' => 1, 'raw' => '' }
       response = @rest.get(url, params)
       json = Json.new.parse(response)
       result = []
