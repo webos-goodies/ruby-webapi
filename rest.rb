@@ -112,6 +112,7 @@ module WebAPI
     end
 
     def get(path, params = {})
+      params = params.reject { |key, value| !value }
       prm = params.map do |k, v|
         "#{urlencode(k.to_s)}=#{urlencode(v.to_s)}"
       end
@@ -121,6 +122,7 @@ module WebAPI
     end
 
     def post(path, params = {})
+      params = params.reject { |key, value| !value }
       req = Net::HTTP::Post.new(path)
       req.set_form_data(params)
       @auth.set!(req)

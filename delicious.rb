@@ -37,27 +37,43 @@ module WebAPI
       def set(src)
         case src
         when Hash
-          @title = str(src['d'])
-          @url   = str(src['u'])
-          @note  = str(src['n'])
-          @tags  = array(src['t'])
+          @title = src['d']
+          @url   = src['u']
+          @notes = src['n']
+          @tags  = src['t']
           @date  = nil
         when REXML::Element
-          @title = str(src.attributes['description'])
-          @url   = str(src.attributes['href'])
-          @note  = str(src.attributes['extended'])
-          @tags  = array(src.attributes['tag'])
-          @date  = nil
-          if src.attributes['time']
-            @date = Time.iso8601(src.attributes['time'])
-          end
+          @title = src.attributes['description']
+          @url   = src.attributes['href']
+          @notes = src.attributes['extended']
+          @tags  = src.attributes['tag']
+          @date  = src.attributes['time']
         when NilClass
-          @title = @url = @note = @tags = @date  = nil
+          @title = @url = @notes = @tags = @date  = nil
         else
           raise
         end
+        normalize!
       end
-      attr_accessor :title, :url, :note, :tags, :date
+      def normalize!
+        @title = str(@title)
+        @url   = str(@url)
+        @notes = str(@notes)
+        @tags  = array(@tags)
+        @date = case @date
+                when Time
+                  @date
+                when NilClass
+                  Time.now
+                else
+                  Time.iso8601(@date.to_s)
+                end
+        self
+      end
+      def normalize
+        clone.normalize!
+      end
+      attr_accessor :title, :url, :notes, :tags, :date
     end
 
     class Tag
@@ -136,16 +152,48 @@ module WebAPI
       @api_mode ? get_tags_api() : get_tags_json()
     end
 
+    def add_post(post, replace = true, shared = true)
+      raise unless @api_mode
+      post = post.normalize
+      params = {
+        'url' => post.url,
+        'description' => post.title,
+        'extended' => post.notes,
+        'dt' => post.date.iso8601 }
+      params['tags'] = post.tags.join(' ') if post.tags.size > 0
+      params['replace'] = 'no' unless replace
+      params['shared'] = 'no' unless shared
+      doc = REXML::Document.new(http_post('/v1/posts/add', params))
+      doc.root.attributes['code']
+    end
+
+    def delete_post(url)
+      raise unless @api_mode
+      params = { 'url' => (url.is_a?(Post) ? url.url : url.to_s) }
+      doc = REXML::Document.new(http_post('/v1/posts/delete', params))
+      doc.root.attributes['code']
+    end
+
     private #---------------------------------------------------------
 
     def http_get(url, params = {})
-      @limiter.execute do @rest.get(url, params) end
+      @limiter.execute { @rest.get(url, params) }
+    end
+
+    def http_post(url, params = {})
+      @limiter.execute { @rest.post(url, params) }
     end
 
     def get_posts_api(opt = {})
       params = {}
       params['tag'] = opt['tags'].join(' ') if opt['tags']
-      doc = REXML::Document.new(http_get('/v1/posts/all', params))
+      params['url'] = opt['url']
+      response = if params['url']
+        response = http_get('/v1/posts/get', params)
+      else
+        response = http_get('/v1/posts/all', params)
+      end
+      doc = REXML::Document.new(response)
       posts = []
       doc.elements.each('posts/post') do |element|
         posts << Post.new(element)
