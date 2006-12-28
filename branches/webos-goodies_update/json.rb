@@ -12,16 +12,16 @@ module WebAPI
     EscapeSrc = '"\\/bfnrt'
     EscapeDst = "\"\\/\b\f\n\r\t"
 
+    # single character tokens
+    TokenLetters = '{}[],:'
+
     # regexp
     StringPattern = /^\"((\\.|[^\"\\])*)\"/m
     IntPattern    = /^[-+]?\d+/
     FloatPattern  = /^[-+]?\d*([.eE][-+]?\d+|\.\d+[eE][-+]?\d+)/
     EscSeqPattern = /\\([\"\\\/bfnrt]|u[0-9a-fA-F]{4})/
-    TokenPattern  = /[^\s\[\]{},:]+/
+    TokenPattern  = /^[^#{TokenLetters.gsub(/./) do |s| '\\'+s end}\s]+/
     EscapePattern = /[^\x20-\x21\x23-\x5b\x5d-\xff]/
-
-    # single character tokens
-    TokenLetters = '{}[],:'
 
     # Override this method if you'd like to handle parse errors by yourself.
     def handle_error(err)
@@ -43,10 +43,10 @@ module WebAPI
 
     def next_token(str)
       match = TokenPattern.match str
-      if !match || !match.pre_match.empty?
-        handle_error(ParseError)
-      else
+      if match
         [match[0], match.post_match]
+      else
+        handle_error(ParseError)
       end
     end
 
