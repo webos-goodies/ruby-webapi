@@ -11,10 +11,10 @@ module WebAPI
 
     module Util
       private
-      def str(s)
+      def to_str(s)
         s ? s.to_s : ''
       end
-      def array(a)
+      def to_tags(a)
         case a
         when String
           a.split(' ')
@@ -24,7 +24,7 @@ module WebAPI
           a.to_a
         end
       end
-      def integer(n)
+      def to_integer(n)
         n ? n.to_i : 0
       end
     end
@@ -56,10 +56,10 @@ module WebAPI
         normalize!
       end
       def normalize!
-        @title = str(@title)
-        @url   = str(@url)
-        @notes = str(@notes)
-        @tags  = array(@tags)
+        @title = to_str(@title)
+        @url   = to_str(@url)
+        @notes = to_str(@notes)
+        @tags  = to_tags(@tags)
         @date = case @date
                 when Time
                   @date
@@ -81,18 +81,18 @@ module WebAPI
       def initialize(arg1 = nil, arg2 = nil)
         set(arg1, arg2)
       end
-      def set(arg1 = nil, arg2 = nil)
+      def set(arg1, arg2 = nil)
         if arg2
-          @name  = str(arg1)
-          @count = integer(arg2)
+          @name  = to_str(arg1)
+          @count = to_integer(arg2)
         else
           case arg1
           when Array
-            @name  = str(arg1[0])
-            @count = integer(arg2[1])
+            @name  = to_str(arg1[0])
+            @count = to_integer(arg2[1])
           when REXML::Element
-            @name  = str(arg1.attributes['tag'])
-            @count = integer(arg1.attributes['count'])
+            @name  = to_str(arg1.attributes['tag'])
+            @count = to_integer(arg1.attributes['count'])
           when NilClass
             @name  = ''
             @count = 0
@@ -102,6 +102,31 @@ module WebAPI
         end
       end
       attr_accessor :name, :count
+    end
+
+    class Bundle
+      include Util
+      def initialize(src = nil)
+        set(src)
+      end
+      def set(src)
+        if src
+          @name = src.attributes['name']
+          @tags = src.attributes['tags']
+        else
+          @name = @tags = nil
+        end
+        normalize!
+      end
+      def normalize!
+        @name = to_str(@name)
+        @tags = to_tags(@tags)
+        self
+      end
+      def normalize
+        clone.normalize!
+      end
+      attr_accessor :name, :tags
     end
 
     class LimiterBase
@@ -148,10 +173,6 @@ module WebAPI
       @api_mode ? get_posts_api(opt) : get_posts_json(opt)
     end
 
-    def get_tags()
-      @api_mode ? get_tags_api() : get_tags_json()
-    end
-
     def add_post(post, replace = true, shared = true)
       raise unless @api_mode
       post = post.normalize
@@ -172,6 +193,20 @@ module WebAPI
       params = { 'url' => (url.is_a?(Post) ? url.url : url.to_s) }
       doc = REXML::Document.new(http_post('/v1/posts/delete', params))
       doc.root.attributes['code']
+    end
+
+    def get_tags()
+      @api_mode ? get_tags_api() : get_tags_json()
+    end
+
+    def get_bundles()
+      raise unless @api_mode
+      doc = REXML::Document.new(http_get('/v1/tags/bundles/all'))
+      bundles = []
+      doc.elements.each('bundles/bundle') do |element|
+        bundles << Bundle.new(element)
+      end
+      bundles
     end
 
     private #---------------------------------------------------------
