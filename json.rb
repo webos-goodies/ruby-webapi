@@ -103,7 +103,7 @@ module WebAPI
           elsif token == 'false'
             add_value(false)
           elsif token == 'null'
-            add_value(null)
+            add_value(nil)
           elsif IntPattern === token
             add_value($&.to_i)
           elsif FloatPattern === token
