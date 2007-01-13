@@ -6,7 +6,6 @@ module WebAPI
 
     # error codes
     ParseError = :parse_error
-    IllegalUnicode = :illegal_unicode
 
     # escape sequence
     EscapeSrc = '"\\/bfnrt'
@@ -37,7 +36,7 @@ module WebAPI
 
     # JSON Parser
     def add_value(value)
-      @tokens << 'v'[0]
+      @tokens << ?v
       @values << value
     end
 
@@ -55,32 +54,9 @@ module WebAPI
         if $1.length == 1
           $1.tr(EscapeSrc, EscapeDst)
         else
-          utf16to8($1[1,4].hex)
+          [$1[1,4].hex].pack('U')
         end
       end
-    end
-
-    def utf16to8(code)
-      str = ''
-      case code
-      when 0 .. 0x7f
-        str << code
-      when 0x80 .. 0x7ff
-        str << 0xc0 + (code >> 6 & 0x1f)
-        str << 0x80 + (code & 0x3f)
-      when 0x800 .. 0xffff
-        str << 0xe0 + (code >> 12 & 0x0f)
-        str << 0x80 + (code >>  6 & 0x3f)
-        str << 0x80 + (code       & 0x3f)
-      when 0x10000 .. 0x1fffff  # It may be unneeded
-        str << 0xf0 + (code >> 18 & 0x07)
-        str << 0x80 + (code >> 12 & 0x3f)
-        str << 0x80 + (code >>  6 & 0x3f)
-        str << 0x80 + (code       & 0x3f)
-      else
-        handle_error(IllegalUnicode)
-      end
-      str
     end
 
     def lex(str)
@@ -90,23 +66,24 @@ module WebAPI
         if token = TokenLetters[str[0,1]]
           @tokens << token[0]
           str = str[1, str.length]
-        elsif str[0] ==  '"'[0]
+        elsif str[0] ==  ?"
           match = StringPattern.match str
           handle_error(ParseError) if !match || !match.pre_match.empty?
-          @tokens << 's'[0]
+          @tokens << ?s
           @values << unescape(match[1])
           str = match.post_match
         else
           token, str = next_token(str)
-          if token == 'true'
+          case token
+          when 'true'
             add_value(true)
-          elsif token == 'false'
+          when 'false'
             add_value(false)
-          elsif token == 'null'
+          when 'null'
             add_value(nil)
-          elsif IntPattern === token
+          when IntPattern
             add_value($&.to_i)
-          elsif FloatPattern === token
+          when FloatPattern
             add_value($&.to_f)
           else
             handle_error(ParseError)
@@ -128,11 +105,11 @@ module WebAPI
 
     def parse_value()
       case get_token()
-      when '{'[0]
+      when ?{
         parse_object()
-      when '['[0]
+      when ?[
         parse_array()
-      when 'v'[0], 's'[0]
+      when ?v, ?s
         value = @values[@value_index]
         @value_index += 1
         value
@@ -143,11 +120,11 @@ module WebAPI
 
     def parse_array()
       value = []
-      if peek_token() != ']'[0]
+      if peek_token() != ?]
         while true
           value << parse_value()
-          break if peek_token() == ']'[0]
-          handle_error(ParseError) if get_token() != ','[0]
+          break if peek_token() == ?]
+          handle_error(ParseError) if get_token() != ?,
         end
       end
       @token_index += 1
@@ -156,15 +133,15 @@ module WebAPI
 
     def parse_object()
       value = {}
-      if peek_token() != '}'[0]
+      if peek_token() != ?}
         while true
-          handle_error(ParseError) if get_token() != 's'[0]
+          handle_error(ParseError) if get_token() != ?s
           label = @values[@value_index]
           @value_index += 1
-          handle_error(ParseError) if get_token() != ':'[0]
+          handle_error(ParseError) if get_token() != ?:
           value[label] = parse_value()
-          break if peek_token() == '}'[0]
-          handle_error(ParseError) if get_token() != ','[0]
+          break if peek_token() == ?}
+          handle_error(ParseError) if get_token() != ?,
         end
       end
       @token_index += 1
@@ -176,11 +153,11 @@ module WebAPI
       lex(s.equal?(str) ? s.clone : s)
       @token_index = 0
       @value_index = 0
-      token  = get_token()
       result = ''
-      if token == '['[0]
+      case get_token()
+      when ?[
         result = parse_array()
-      elsif token == '{'[0]
+      when ?{
         result = parse_object()
       else
         handle_error(ParseError)
@@ -204,11 +181,12 @@ module WebAPI
     end
 
     def build_value(obj)
-      if obj.is_a?(Numeric)
+      case obj
+      when Numeric
         obj.to_s
-      elsif obj.is_a?(Array)
+      when Array
         build_array(obj)
-      elsif obj.is_a?(Hash)
+      when Hash
         build_object(obj)
       else
         '"' + escape(obj.to_s) + '"'
@@ -226,9 +204,10 @@ module WebAPI
     end
 
     def build(obj)
-      if obj.is_a?(Array)
+      case obj
+      when Array
         build_array(obj)
-      elsif obj.is_a?(Hash)
+      when Hash
         build_object(obj)
       else
         build_array([obj])
