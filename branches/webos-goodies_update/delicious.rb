@@ -223,11 +223,12 @@ module WebAPI
       params = {}
       params['tag'] = opt['tags'].join(' ') if opt['tags']
       params['url'] = opt['url']
-      response = if params['url']
-        response = http_get('/v1/posts/get', params)
-      else
-        response = http_get('/v1/posts/all', params)
-      end
+      response =
+        if params['url']
+          http_get('/v1/posts/get', params)
+        else
+          http_get('/v1/posts/all', params)
+        end
       doc = REXML::Document.new(response)
       posts = []
       doc.elements.each('posts/post') do |element|
