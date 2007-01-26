@@ -4,7 +4,17 @@ require 'time'
 
 module WebAPI
 
+  module Util
+    def urlencode(str)
+      str.gsub(/[^a-zA-Z0-9_\.\-]/n) do |s|
+        if s == ' ' then '+' else  sprintf('%%%02x', s[0])  end
+      end
+    end
+  end
+
   class REST
+
+    include Util
 
     # Protocol
 
@@ -102,25 +112,21 @@ module WebAPI
     end
 
     def get(path, params = {})
+      params = params.reject { |key, value| !value }
       prm = params.map do |k, v|
         "#{urlencode(k.to_s)}=#{urlencode(v.to_s)}"
-      end.join('&')
-      req = Net::HTTP::Get.new(path + (prm.size <= 0 ? '' : '?'+prm))
+      end
+      req = Net::HTTP::Get.new(path + (prm.size <= 0 ? '' : '?'+prm.join('&')))
       @auth.set!(req)
       @protocol.call(req)
     end
 
     def post(path, params = {})
+      params = params.reject { |key, value| !value }
       req = Net::HTTP::Post.new(path)
       req.set_form_data(params)
       @auth.set!(req)
       @protocol.call(req)
-    end
-
-    def urlencode(str)
-      str.gsub(/[^a-zA-Z0-9_\.\-]/n) do |s|
-        if s == ' ' then '+' else  sprintf('%%%02x', s[0])  end
-      end
     end
   end
 
