@@ -242,7 +242,7 @@ module WebAPI
       count = opt['count'] ? opt['count'] : 100
       url = '/feeds/json/' + @rest.urlencode(@username + tags)
       params = { 'count' => count, 'raw' => '' }
-      Json.new.parse(http_get(url, params)).map! do |post|
+      JsonParser.new.parse(http_get(url, params)).map! do |post|
         Post.new(post)
       end
     end
@@ -259,7 +259,7 @@ module WebAPI
     def get_tags_json()
       url = '/feeds/json/tags/' + @rest.urlencode(@username)
       params = { 'atleast' => 1, 'raw' => '' }
-      json = Json.new.parse(http_get(url, params))
+      json = JsonParser.new.parse(http_get(url, params))
       result = []
       json.each do |key, value|
         result << Tag.new(key, value)

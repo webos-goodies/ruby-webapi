@@ -1,179 +1,163 @@
 # json API
 
+require 'strscan'
+
 module WebAPI
 
-  class Json
+  class JsonParser
 
-    # error codes
-    ParseError = :parse_error
+    Name               = 'WebAPI::Json'
+    ERR_IllegalSyntax  = "[#{Name}] Syntax error"
+    ERR_IllegalUnicode = "[#{Name}] Illegal unicode sequence"
 
-    # escape sequence
-    EscapeSrc = '"\\/bfnrt'
-    EscapeDst = "\"\\/\b\f\n\r\t"
+    StringRegex = /\s*"((?:\\.|[^"\\])*)"/
+    ValueRegex  = /\s*(?:
+		(true)|(false)|(null)|                          # 1:true, 2:false, 3:null
+		(?:\"((?:\\.|[^\"\\])*)\")|                     # 4:String
+		([-+]?\d*(?:[.eE][-+]?\d+|\.\d+[eE][-+]?\d+))|  # 5:Float
+		([-+]?\d+)|                                     # 6:Integer
+		(\{)|(\[))/x                                    # 7:Hash, 8:Array
 
-    # single character tokens
-    TokenLetters = '{}[],:'
-
-    # regexp
-    StringPattern = /^\"((\\.|[^\"\\])*)\"/m
-    IntPattern    = /^[-+]?\d+/
-    FloatPattern  = /^[-+]?\d*([.eE][-+]?\d+|\.\d+[eE][-+]?\d+)/
-    EscSeqPattern = /\\([\"\\\/bfnrt]|u[0-9a-fA-F]{4})/
-    TokenPattern  = /^[^#{TokenLetters.gsub(/./) do |s| '\\'+s end}\s]+/
-    EscapePattern = /[^\x20-\x21\x23-\x5b\x5d-\xff]/
-
-    # Override this method if you'd like to handle parse errors by yourself.
-    def handle_error(err)
-      raise
+    def initialize(option = {})
+      @default_validation = option.has_key?('validation') ? option['validation'] : true
+      @default_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : true
     end
 
-    def initialize
-      @tokens = nil
-      @token_index = 0
-      @values = nil
-      @value_index = 0
+    def parse(str, option = {})
+      @enable_validation = option.has_key?('validation') ? option['validation'] : @default_validation
+      @enable_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : @default_surrogate
+      @scanner = StringScanner.new(str)
+      obj = case get_symbol[0]
+            when ?{ then parse_hash
+            when ?[ then parse_array
+            else         raise err_msg(ERR_IllegalSyntax)
+            end
+      @scanner = nil
+      obj
     end
 
-    # JSON Parser
-    def add_value(value)
-      @tokens << ?v
-      @values << value
-    end
-
-    def next_token(str)
-      match = TokenPattern.match str
-      if match
-        [match[0], match.post_match]
-      else
-        handle_error(ParseError)
-      end
-    end
-
-    def unescape(str)
-      str.gsub(EscSeqPattern) do
-        if $1.length == 1
-          $1.tr(EscapeSrc, EscapeDst)
-        else
-          [$1[1,4].hex].pack('U')
-        end
-      end
-    end
-
-    def lex(str)
-      @tokens = ''
-      @values = []
-      until (str = str.lstrip).empty?
-        if token = TokenLetters[str[0,1]]
-          @tokens << token[0]
-          str = str[1, str.length]
-        elsif str[0] ==  ?"
-          match = StringPattern.match str
-          handle_error(ParseError) if !match || !match.pre_match.empty?
-          @tokens << ?s
-          @values << unescape(match[1])
-          str = match.post_match
-        else
-          token, str = next_token(str)
-          case token
-          when 'true'
-            add_value(true)
-          when 'false'
-            add_value(false)
-          when 'null'
-            add_value(nil)
-          when IntPattern
-            add_value($&.to_i)
-          when FloatPattern
-            add_value($&.to_f)
-          else
-            handle_error(ParseError)
+    def validate_string(str)
+      code = 0
+      rest = 0
+      str.each_byte do |c|
+        if rest <= 0
+          case c
+          when 0x01..0x7f then rest = 0
+          when 0xc0..0xdf then rest = 1 ; code = c & 0x1f
+          when 0xe0..0xef then rest = 2 ; code = c & 0x0f
+          when 0xf0..0xf7 then rest = 3 ; code = c & 0x07
+          when 0xf8..0xfb then rest = 4 ; code = c & 0x03
+          when 0xfc, 0xfd then rest = 5 ; code = c & 0x01
+          else                 raise err_msg(ERR_IllegalUnicode)
           end
+        elsif 0x80..0xbf === c
+          code = (code << 6) | (c & 0x3f)
+          if (rest -= 1) <= 0 && ((0xd800..0xdbff) === code || (0xdc00..0xdfff) === code)
+            raise err_msg(ERR_IllegalUnicode)
+          end
+        else
+          raise err_msg(ERR_IllegalUnicode)
         end
       end
     end
 
-    def peek_token()
-      handle_error(ParseError) unless token = @tokens[@token_index]
-      token
+    private
+
+    def err_msg(err)
+      err + " \"#{@scanner.string[[0, @scanner.pos - 8].max,16]}\""
     end
 
-    def get_token()
-      handle_error(ParseError) unless token = @tokens[@token_index]
-      @token_index += 1
-      token
+    def unescape_string(str)
+      str = str.gsub(/\\(["\\\/bfnrt])/) do
+        $1.tr('"\\/bfnrt', "\"\\/\b\f\n\r\t")
+      end.gsub(/(\\u[0-9a-fA-F]{4})+/) do |matched|
+        seq = matched.scan(/\\u([0-9a-fA-F]{4})/).flatten.map { |c| c.hex }
+        if @enable_surrogate
+          seq.each_index do |index|
+            if seq[index] && (0xd800..0xdbff) === seq[index]
+              n = index + 1
+              raise err_msg(ERR_IllegalUnicode) unless seq[n] && 0xdc00..0xdfff === seq[n]
+              seq[index] = 0x10000 + ((seq[index] & 0x03ff) << 10) + (seq[n] & 0x03ff)
+              seq[n] = nil
+            end
+          end.compact
+        end
+        seq.pack('U*')
+      end
+      validate_string(str) if @enable_validation
+      str
     end
 
-    def parse_value()
-      case get_token()
-      when ?{
-        parse_object()
-      when ?[
-        parse_array()
-      when ?v, ?s
-        value = @values[@value_index]
-        @value_index += 1
-        value
-      else
-        handle_error(ParseError)
+    def get_symbol
+      raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(/\s*(.)/)
+      @scanner[1]
+    end
+
+    def parse_string
+      raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(StringRegex)
+      unescape_string(@scanner[1])
+    end
+
+    def parse_value
+      raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(ValueRegex)
+      case
+      when @scanner[1] then true
+      when @scanner[2] then false
+      when @scanner[3] then nil
+      when @scanner[4] then unescape_string(@scanner[4])
+      when @scanner[5] then @scanner[5].to_f
+      when @scanner[6] then @scanner[6].to_i
+      when @scanner[7] then parse_hash
+      when @scanner[8] then parse_array
+      else                  raise err_msg(ERR_IllegalSyntax)
       end
     end
 
-    def parse_array()
-      value = []
-      if peek_token() != ?]
-        while true
-          value << parse_value()
-          break if peek_token() == ?]
-          handle_error(ParseError) if get_token() != ?,
+    def parse_hash
+      obj = {}
+      while true
+        index = parse_string
+        raise err_msg(ERR_IllegalSyntax) unless get_symbol[0] == ?:
+        value = parse_value
+        obj[index] = value
+        case get_symbol[0]
+        when ?} then return obj
+        when ?, then next
+        else         raise err_msg(ERR_IllegalSyntax)
         end
       end
-      @token_index += 1
-      value
     end
 
-    def parse_object()
-      value = {}
-      if peek_token() != ?}
-        while true
-          handle_error(ParseError) if get_token() != ?s
-          label = @values[@value_index]
-          @value_index += 1
-          handle_error(ParseError) if get_token() != ?:
-          value[label] = parse_value()
-          break if peek_token() == ?}
-          handle_error(ParseError) if get_token() != ?,
+    def parse_array
+      obj = []
+      while true
+        obj << parse_value
+        case get_symbol[0]
+        when ?] then return obj
+        when ?, then next
+        else         raise err_msg(ERR_IllegalSyntax)
         end
       end
-      @token_index += 1
-      value
     end
 
-    def parse(str)
-      s = str.to_s
-      lex(s.equal?(str) ? s.clone : s)
-      @token_index = 0
-      @value_index = 0
-      result = ''
-      case get_token()
-      when ?[
-        result = parse_array()
-      when ?{
-        result = parse_object()
-      else
-        handle_error(ParseError)
+  end
+
+  class JsonBuilder
+
+    def build(obj)
+      case obj
+      when Array then build_array(obj)
+      when Hash  then build_object(obj)
+      else            build_array([obj])
       end
-      @tokens = nil
-      @token_index = 0
-      @values = nil
-      @value_index = 0
-      result
     end
 
-    # JSON Builder
+    private
+
     def escape(str)
-      str.gsub(EscapePattern) do |chr|
-        if chr[0] != 0 && (index = EscapeDst.index(chr[0]))
-          "\\" + EscapeSrc[index, 1]
+      str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/) do |chr|
+        if chr[0] != 0 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
+          "\\" + '"\\/bfnrt'[index, 1]
         else
           sprintf("\\u%04x", chr[0])
         end
@@ -182,14 +166,11 @@ module WebAPI
 
     def build_value(obj)
       case obj
-      when Numeric
-        obj.to_s
-      when Array
-        build_array(obj)
-      when Hash
-        build_object(obj)
-      else
-        '"' + escape(obj.to_s) + '"'
+      when Numeric, TrueClass, FalseClass then obj.to_s
+      when NilClass then 'null'
+      when Array    then build_array(obj)
+      when Hash     then build_object(obj)
+      else          "\"#{escape(obj.to_s)}\""
       end
     end
 
@@ -201,17 +182,6 @@ module WebAPI
       '{' + obj.map do |item|
         "#{build_value(item[0].to_s)}:#{build_value(item[1])}"
       end.join(',') + '}'
-    end
-
-    def build(obj)
-      case obj
-      when Array
-        build_array(obj)
-      when Hash
-        build_object(obj)
-      else
-        build_array([obj])
-      end
     end
 
   end
