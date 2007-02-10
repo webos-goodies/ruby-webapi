@@ -52,7 +52,7 @@ module WebAPI
           end
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
-          if (rest -= 1) <= 0 && ((0xd800..0xdbff) === code || (0xdc00..0xdfff) === code)
+          if (rest -= 1) <= 0 && ((0x00..0x7f) === code || (0xd800..0xdfff) === code)
             raise err_msg(ERR_IllegalUnicode)
           end
         else
