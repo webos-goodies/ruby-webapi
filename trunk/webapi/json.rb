@@ -6,7 +6,7 @@ module WebAPI
 
   class JsonParser
 
-    Name               = 'WebAPI::Json'
+    Name               = 'WebAPI::JsonParser'
     ERR_IllegalSyntax  = "[#{Name}] Syntax error"
     ERR_IllegalUnicode = "[#{Name}] Illegal unicode sequence"
 
