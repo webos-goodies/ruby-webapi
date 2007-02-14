@@ -21,11 +21,14 @@ module WebAPI
     def initialize(option = {})
       @default_validation = option.has_key?('validation') ? option['validation'] : true
       @default_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : true
+      @default_error_chr  = option.has_key?('error_chr')  ? option['error_chr']  : nil
     end
 
     def parse(str, option = {})
       @enable_validation = option.has_key?('validation') ? option['validation'] : @default_validation
       @enable_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : @default_surrogate
+      @error_chr         = option.has_key?('error_chr')  ? option['error_chr']  : @default_error_chr
+      @error_chr = @error_chr[0] if String === @error_chr
       @scanner = StringScanner.new(str)
       obj = case get_symbol[0]
             when ?{ then parse_hash
@@ -40,10 +43,11 @@ module WebAPI
       code  = 0
       rest  = 0
       range = nil
+      ucs   = []
       str.each_byte do |c|
         if rest <= 0
           case c
-          when 0x01..0x7f then rest = 0
+          when 0x01..0x7f then rest = 0 ; ucs << c
           when 0xc0..0xdf then rest = 1 ; code = c & 0x1f ; range = 0x00080..0x0007ff
           when 0xe0..0xef then rest = 2 ; code = c & 0x0f ; range = 0x00800..0x00ffff
           when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x1fffff
@@ -52,15 +56,22 @@ module WebAPI
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
           if (rest -= 1) <= 0 && (!(range === code) || (0xd800..0xdfff) === code)
-            raise err_msg(ERR_IllegalUnicode)
+            code = error_chr()
           end
+          ucs << code
         else
-          raise err_msg(ERR_IllegalUnicode)
+          ucs << error_chr()
         end
       end
+      ucs.pack('U*')
     end
 
     private
+
+    def error_chr()
+      raise err_msg(ERR_IllegalUnicode) unless @error_chr
+      @error_chr
+    end
 
     def err_msg(err)
       err + " \"#{@scanner.string[[0, @scanner.pos - 8].max,16]}\""
@@ -83,7 +94,7 @@ module WebAPI
         end
         seq.pack('U*')
       end
-      validate_string(str) if @enable_validation
+      str = validate_string(str) if @enable_validation
       str
     end
 
