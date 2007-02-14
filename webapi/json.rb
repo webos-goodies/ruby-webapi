@@ -19,16 +19,16 @@ module WebAPI
 		(\{)|(\[))/x                                    # 7:Hash, 8:Array
 
     def initialize(option = {})
-      @default_validation = option.has_key?('validation') ? option['validation'] : true
-      @default_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : true
-      @default_error_chr  = option.has_key?('error_chr')  ? option['error_chr']  : nil
+      @default_validation    = option.has_key?('validation')    ? option['validation']    : true
+      @default_surrogate     = option.has_key?('surrogate')     ? option['surrogate']     : true
+      @default_malformed_chr = option.has_key?('malformed_chr') ? option['malformed_chr'] : nil
     end
 
     def parse(str, option = {})
-      @enable_validation = option.has_key?('validation') ? option['validation'] : @default_validation
-      @enable_surrogate  = option.has_key?('surrogate')  ? option['surrogate']  : @default_surrogate
-      @error_chr         = option.has_key?('error_chr')  ? option['error_chr']  : @default_error_chr
-      @error_chr = @error_chr[0] if String === @error_chr
+      @enable_validation = option.has_key?('validation')    ? option['validation']    : @default_validation
+      @enable_surrogate  = option.has_key?('surrogate')     ? option['surrogate']     : @default_surrogate
+      @malformed_chr     = option.has_key?('malformed_chr') ? option['malformed_chr'] : @default_malformed_chr
+      @malformed_chr = @malformed_chr[0] if String === @malformed_chr
       @scanner = StringScanner.new(str)
       obj = case get_symbol[0]
             when ?{ then parse_hash
@@ -51,16 +51,16 @@ module WebAPI
           when 0xc0..0xdf then rest = 1 ; code = c & 0x1f ; range = 0x00080..0x0007ff
           when 0xe0..0xef then rest = 2 ; code = c & 0x0f ; range = 0x00800..0x00ffff
           when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x1fffff
-          else                 raise err_msg(ERR_IllegalUnicode)
+          else                 ucs << malformed_chr()
           end
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
           if (rest -= 1) <= 0 && (!(range === code) || (0xd800..0xdfff) === code)
-            code = error_chr()
+            code = malformed_chr()
           end
           ucs << code
         else
-          ucs << error_chr()
+          ucs << malformed_chr()
         end
       end
       ucs.pack('U*')
@@ -68,9 +68,9 @@ module WebAPI
 
     private
 
-    def error_chr()
-      raise err_msg(ERR_IllegalUnicode) unless @error_chr
-      @error_chr
+    def malformed_chr()
+      raise err_msg(ERR_IllegalUnicode) unless @malformed_chr
+      @malformed_chr
     end
 
     def err_msg(err)
