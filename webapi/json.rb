@@ -37,22 +37,21 @@ module WebAPI
     end
 
     def validate_string(str)
-      code = 0
-      rest = 0
+      code  = 0
+      rest  = 0
+      range = nil
       str.each_byte do |c|
         if rest <= 0
           case c
           when 0x01..0x7f then rest = 0
-          when 0xc0..0xdf then rest = 1 ; code = c & 0x1f
-          when 0xe0..0xef then rest = 2 ; code = c & 0x0f
-          when 0xf0..0xf7 then rest = 3 ; code = c & 0x07
-          when 0xf8..0xfb then rest = 4 ; code = c & 0x03
-          when 0xfc, 0xfd then rest = 5 ; code = c & 0x01
+          when 0xc0..0xdf then rest = 1 ; code = c & 0x1f ; range = 0x00080..0x0007ff
+          when 0xe0..0xef then rest = 2 ; code = c & 0x0f ; range = 0x00800..0x00ffff
+          when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x1fffff
           else                 raise err_msg(ERR_IllegalUnicode)
           end
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
-          if (rest -= 1) <= 0 && ((0x00..0x7f) === code || (0xd800..0xdfff) === code)
+          if (rest -= 1) <= 0 && (!(range === code) || (0xd800..0xdfff) === code)
             raise err_msg(ERR_IllegalUnicode)
           end
         else
