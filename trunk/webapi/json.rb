@@ -1,11 +1,32 @@
-# json API
+# = Simple JSON parser & builder
+#
+# Author::  Chihiro Ito
+# License:: Public domain (unlike other files)
+# Support:: http://groups.google.com/group/webos-goodies/
+#
+# This file contains two simple JSON processing classes. WebAPI::JsonParser
+# converts a JSON string to an array or a hash. WebAPI::JsonBuilder performs
+# vice versa. These classes are standard compliant and are designed for
+# stability and reliability. Especially WebAPI::JsonParser has UTF-8 validation
+# functionality so you can avoid some kind of security attack.
 
 require 'strscan'
 
 module WebAPI
 
+  # = Simple JSON parser
+  #
+  # This class converts a JSON string to an array or a hash. If the *json_str*
+  # contains a JSON form string, you can convert it like below.
+  #
+  #   ruby_obj = WebAPI::JsonParser.new.parse(json_str)
+  #
+  # If the *json_str* has one or more malformed multi-byte character sequence,
+  # JsonParser throws an exception by default. You can change this behavior
+  # to replacing with an arbitrary character. See below for details.
   class JsonParser
 
+    #:stopdoc:
     Name               = 'WebAPI::JsonParser'
     ERR_IllegalSyntax  = "[#{Name}] Syntax error"
     ERR_IllegalUnicode = "[#{Name}] Illegal unicode sequence"
@@ -17,17 +38,32 @@ module WebAPI
 		([-+]?\d*(?:[.eE][-+]?\d+|\.\d+[eE][-+]?\d+))|  # 5:Float
 		([-+]?\d+)|                                     # 6:Integer
 		(\{)|(\[))/x                                    # 7:Hash, 8:Array
+    #:startdoc:
 
-    def initialize(option = {})
-      @default_validation    = option.has_key?('validation')    ? option['validation']    : true
-      @default_surrogate     = option.has_key?('surrogate')     ? option['surrogate']     : true
-      @default_malformed_chr = option.has_key?('malformed_chr') ? option['malformed_chr'] : nil
+    # Create a new instance of JsonParser. *options* can contain these values.
+    # [validation]
+    #     If set to false, UTF-8 validation is disabled. true by default.
+    # [surrogate]
+    #     If set to false, surrogate pair support is disabled. true by default.
+    # [malformed_chr]
+    #     A malformed character in JSON string will be replaced with this value.
+    #     If set to nil, An exception will be thrown in this situation.
+    #     nil by default.
+    def initialize(options = {})
+      @default_validation    = options.has_key?('validation')    ? options['validation']    : true
+      @default_surrogate     = options.has_key?('surrogate')     ? options['surrogate']     : true
+      @default_malformed_chr = options.has_key?('malformed_chr') ? options['malformed_chr'] : nil
     end
 
-    def parse(str, option = {})
-      @enable_validation = option.has_key?('validation')    ? option['validation']    : @default_validation
-      @enable_surrogate  = option.has_key?('surrogate')     ? option['surrogate']     : @default_surrogate
-      @malformed_chr     = option.has_key?('malformed_chr') ? option['malformed_chr'] : @default_malformed_chr
+    # Convert the JSON string.
+    # [str]
+    #     A JSON form string. This must be encoded using UTF-8.
+    # [options]
+    #     Same as new.
+    def parse(str, options = {})
+      @enable_validation = options.has_key?('validation')    ? options['validation']    : @default_validation
+      @enable_surrogate  = options.has_key?('surrogate')     ? options['surrogate']     : @default_surrogate
+      @malformed_chr     = options.has_key?('malformed_chr') ? options['malformed_chr'] : @default_malformed_chr
       @malformed_chr = @malformed_chr[0] if String === @malformed_chr
       @scanner = StringScanner.new(str)
       obj = case get_symbol[0]
@@ -39,7 +75,9 @@ module WebAPI
       obj
     end
 
-    def validate_string(str)
+    private #---------------------------------------------------------
+
+    def validate_string(str, malformed_chr = nil)
       code  = 0
       rest  = 0
       range = nil
@@ -51,26 +89,24 @@ module WebAPI
           when 0xc0..0xdf then rest = 1 ; code = c & 0x1f ; range = 0x00080..0x0007ff
           when 0xe0..0xef then rest = 2 ; code = c & 0x0f ; range = 0x00800..0x00ffff
           when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x1fffff
-          else                 ucs << malformed_chr()
+          else                 ucs << handle_malformed_chr(malformed_chr)
           end
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
           if (rest -= 1) <= 0 && (!(range === code) || (0xd800..0xdfff) === code)
-            code = malformed_chr()
+            code = handle_malformed_chr(malformed_chr)
           end
           ucs << code
         else
-          ucs << malformed_chr()
+          ucs << handle_malformed_chr(malformed_chr)
         end
       end
       ucs.pack('U*')
     end
 
-    private
-
-    def malformed_chr()
-      raise err_msg(ERR_IllegalUnicode) unless @malformed_chr
-      @malformed_chr
+    def handle_malformed_chr(chr)
+      raise err_msg(ERR_IllegalUnicode) unless chr
+      chr
     end
 
     def err_msg(err)
@@ -94,7 +130,7 @@ module WebAPI
         end
         seq.pack('U*')
       end
-      str = validate_string(str) if @enable_validation
+      str = validate_string(str, @malformed_chr) if @enable_validation
       str
     end
 
@@ -152,6 +188,20 @@ module WebAPI
 
   end
 
+  # = Simple JSON builder
+  #
+  # This class converts an Ruby object to a JSON string. you can convert
+  # the *ruby_obj* like below.
+  #
+  #   json_str = WebAPI::JsonBuilder.new.build(ruby_obj)
+  #
+  # The *ruby_obj* must satisfy these conditions.
+  # - It must support to_s method, otherwise must be an array, a hash or nil.
+  # - All keys of a hash must support to_s method.
+  # - All values of an array or a hash must satisfy all conditions mentioned above.
+  #
+  # If the *ruby_obj* is not an array or a hash, it will be converted to an array
+  # with a single element.
   class JsonBuilder
 
     def build(obj)
@@ -162,7 +212,7 @@ module WebAPI
       end
     end
 
-    private
+    private #---------------------------------------------------------
 
     def escape(str)
       str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/) do |chr|
