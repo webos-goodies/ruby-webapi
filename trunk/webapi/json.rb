@@ -16,14 +16,14 @@ module WebAPI
 
   # = Simple JSON parser
   #
-  # This class converts a JSON string to an array or a hash. If the *json_str*
+  # This class converts a JSON string to an array or a hash. If *json_str*
   # contains a JSON form string, you can convert it like below.
   #
   #   ruby_obj = WebAPI::JsonParser.new.parse(json_str)
   #
-  # If the *json_str* has one or more malformed multi-byte character sequence,
-  # JsonParser throws an exception by default. You can change this behavior
-  # to replacing with an arbitrary character. See below for details.
+  # If *json_str* has one or more invalid UTF-8 sequence, JsonParser throws
+  # exception by default. You can change this behavior to replacing with an
+  # arbitrary unicode character. See below for details.
   class JsonParser
 
     #:stopdoc:
@@ -41,18 +41,18 @@ module WebAPI
     #:startdoc:
 
     # Create a new instance of JsonParser. *options* can contain these values.
-    # [validation]
+    # [:validation]
     #     If set to false, UTF-8 validation is disabled. true by default.
-    # [surrogate]
+    # [:surrogate]
     #     If set to false, surrogate pair support is disabled. true by default.
-    # [malformed_chr]
-    #     A malformed character in JSON string will be replaced with this value.
+    # [:malformed_chr]
+    #     An invalid sequence in JSON string will be replaced with this value.
     #     If set to nil, An exception will be thrown in this situation.
     #     nil by default.
     def initialize(options = {})
-      @default_validation    = options.has_key?('validation')    ? options['validation']    : true
-      @default_surrogate     = options.has_key?('surrogate')     ? options['surrogate']     : true
-      @default_malformed_chr = options.has_key?('malformed_chr') ? options['malformed_chr'] : nil
+      @default_validation    = options.has_key?(:validation)    ? options[:validation]    : true
+      @default_surrogate     = options.has_key?(:surrogate)     ? options[:surrogate]     : true
+      @default_malformed_chr = options.has_key?(:malformed_chr) ? options[:malformed_chr] : nil
     end
 
     # Convert the JSON string.
@@ -61,9 +61,9 @@ module WebAPI
     # [options]
     #     Same as new.
     def parse(str, options = {})
-      @enable_validation = options.has_key?('validation')    ? options['validation']    : @default_validation
-      @enable_surrogate  = options.has_key?('surrogate')     ? options['surrogate']     : @default_surrogate
-      @malformed_chr     = options.has_key?('malformed_chr') ? options['malformed_chr'] : @default_malformed_chr
+      @enable_validation = options.has_key?(:validation)    ? options[:validation]    : @default_validation
+      @enable_surrogate  = options.has_key?(:surrogate)     ? options[:surrogate]     : @default_surrogate
+      @malformed_chr     = options.has_key?(:malformed_chr) ? options[:malformed_chr] : @default_malformed_chr
       @malformed_chr = @malformed_chr[0] if String === @malformed_chr
       @scanner = StringScanner.new(str)
       obj = case get_symbol[0]
@@ -191,11 +191,11 @@ module WebAPI
   # = Simple JSON builder
   #
   # This class converts an Ruby object to a JSON string. you can convert
-  # the *ruby_obj* like below.
+  # *ruby_obj* like below.
   #
   #   json_str = WebAPI::JsonBuilder.new.build(ruby_obj)
   #
-  # The *ruby_obj* must satisfy these conditions.
+  # *ruby_obj* must satisfy these conditions.
   # - It must support to_s method, otherwise must be an array, a hash or nil.
   # - All keys of a hash must support to_s method.
   # - All values of an array or a hash must satisfy all conditions mentioned above.
