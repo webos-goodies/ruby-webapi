@@ -49,7 +49,8 @@ data3 = <<EOS
 	"true" : true,
 	"false" : false,
 	"null" : null,
-	"ABC" : "\\u0041\\u0042\\u0043\\u3042\\u3044\\u3046\xc0\xa0\r\n"
+	"ABC" : "\\u0041\\u0042\\u0043\\u3042\\u3044\\u3046\xc0\xa0\r\n",
+	"" : [ [], {}, "" ]
 }
 EOS
 
