@@ -139,6 +139,10 @@ module WebAPI
       @scanner[1]
     end
 
+    def peek_symbol
+      @scanner.match?(/\s*(.)/) ? @scanner[1] : nil
+    end
+
     def parse_string
       raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(StringRegex)
       unescape_string(@scanner[1])
@@ -161,6 +165,7 @@ module WebAPI
 
     def parse_hash
       obj = {}
+      if peek_symbol[0] == ?} then get_symbol ; return obj ; end
       while true
         index = parse_string
         raise err_msg(ERR_IllegalSyntax) unless get_symbol[0] == ?:
@@ -176,6 +181,7 @@ module WebAPI
 
     def parse_array
       obj = []
+      if peek_symbol[0] == ?] then get_symbol ; return obj ; end
       while true
         obj << parse_value
         case get_symbol[0]
