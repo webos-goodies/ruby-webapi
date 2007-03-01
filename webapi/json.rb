@@ -34,11 +34,11 @@ module WebAPI
 
     StringRegex = /\s*"((?:\\.|[^"\\])*)"/
     ValueRegex  = /\s*(?:
-		(true)|(false)|(null)|                          # 1:true, 2:false, 3:null
-		(?:\"((?:\\.|[^\"\\])*)\")|                     # 4:String
-		([-+]?\d*(?:[.eE][-+]?\d+|\.\d+[eE][-+]?\d+))|  # 5:Float
-		([-+]?\d+)|                                     # 6:Integer
-		(\{)|(\[))/x                                    # 7:Hash, 8:Array
+		(true)|(false)|(null)|                  # 1:true, 2:false, 3:null
+		(?:\"((?:\\.|[^\"\\])*)\")|             # 4:String
+		([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)|  # 5:Float
+		([-+]?\d+)|                             # 6:Integer
+		(\{)|(\[))/x                            # 7:Hash, 8:Array
     #:startdoc:
 
     # Create a new instance of JsonParser. *options* can contain these values.
