@@ -3,6 +3,10 @@
 require 'SimpleJson'
 require 'nkf'
 
+class JsonParser
+  Debug = true
+end
+
 data1 = <<EOS
 {
 	"Image": {

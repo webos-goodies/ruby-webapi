@@ -27,6 +27,7 @@ module WebAPI
   class JsonParser
 
     #:stopdoc:
+    Debug              = false
     Name               = 'WebAPI::JsonParser'
     ERR_IllegalSyntax  = "[#{Name}] Syntax error"
     ERR_IllegalUnicode = "[#{Name}] Illegal unicode sequence"
@@ -110,7 +111,7 @@ module WebAPI
     end
 
     def err_msg(err)
-      err + " \"#{@scanner.string[[0, @scanner.pos - 8].max,16]}\""
+      err + (Debug ? " #{@scanner.string[[0, @scanner.pos - 8].max,16].inspect}" : "")
     end
 
     def unescape_string(str)
