@@ -1,4 +1,11 @@
-# del.icio.us API class
+# = del.icio.us API class
+#
+# Author::  Chihiro Ito
+# License:: New BSD License
+# Support:: http://groups.google.com/group/webos-goodies/
+#
+# This file contains WebAPI::Delicious class which allows you to access and
+# manipulate your del.icio.us bookmarks easily.
 
 require 'time'
 require 'rexml/document'
