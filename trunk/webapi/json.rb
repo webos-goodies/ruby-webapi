@@ -32,13 +32,13 @@ module WebAPI
     ERR_IllegalSyntax  = "[#{Name}] Syntax error"
     ERR_IllegalUnicode = "[#{Name}] Illegal unicode sequence"
 
-    StringRegex = /\s*"((?:\\.|[^"\\])*)"/
+    StringRegex = /\s*"((?:\\.|[^"\\])*)"/n
     ValueRegex  = /\s*(?:
 		(true)|(false)|(null)|                  # 1:true, 2:false, 3:null
 		(?:\"((?:\\.|[^\"\\])*)\")|             # 4:String
 		([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)|  # 5:Float
 		([-+]?\d+)|                             # 6:Integer
-		(\{)|(\[))/x                            # 7:Hash, 8:Array
+		(\{)|(\[))/xn                           # 7:Hash, 8:Array
     #:startdoc:
 
     # Create a new instance of JsonParser. *options* can contain these values.
@@ -56,7 +56,7 @@ module WebAPI
       @default_malformed_chr = options.has_key?(:malformed_chr) ? options[:malformed_chr] : nil
     end
 
-    # Convert the JSON string.
+    # Convert *str* to an array or hash.
     # [str]
     #     A JSON form string. This must be encoded using UTF-8.
     # [options]
@@ -89,7 +89,7 @@ module WebAPI
           when 0x01..0x7f then rest = 0 ; ucs << c
           when 0xc0..0xdf then rest = 1 ; code = c & 0x1f ; range = 0x00080..0x0007ff
           when 0xe0..0xef then rest = 2 ; code = c & 0x0f ; range = 0x00800..0x00ffff
-          when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x1fffff
+          when 0xf0..0xf7 then rest = 3 ; code = c & 0x07 ; range = 0x10000..0x10ffff
           else                 ucs << handle_malformed_chr(malformed_chr)
           end
         elsif 0x80..0xbf === c
@@ -115,10 +115,10 @@ module WebAPI
     end
 
     def unescape_string(str)
-      str = str.gsub(/\\(["\\\/bfnrt])/) do
+      str = str.gsub(/\\(["\\\/bfnrt])/n) do
         $1.tr('"\\/bfnrt', "\"\\/\b\f\n\r\t")
-      end.gsub(/(\\u[0-9a-fA-F]{4})+/) do |matched|
-        seq = matched.scan(/\\u([0-9a-fA-F]{4})/).flatten.map { |c| c.hex }
+      end.gsub(/(\\u[0-9a-fA-F]{4})+/n) do |matched|
+        seq = matched.scan(/\\u([0-9a-fA-F]{4})/n).flatten.map { |c| c.hex }
         if @enable_surrogate
           seq.each_index do |index|
             if seq[index] && (0xd800..0xdbff) === seq[index]
@@ -136,12 +136,12 @@ module WebAPI
     end
 
     def get_symbol
-      raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(/\s*(.)/)
+      raise err_msg(ERR_IllegalSyntax) unless @scanner.scan(/\s*(.)/n)
       @scanner[1]
     end
 
     def peek_symbol
-      @scanner.match?(/\s*(.)/) ? @scanner[1] : nil
+      @scanner.match?(/\s*(.)/n) ? @scanner[1] : nil
     end
 
     def parse_string
@@ -211,18 +211,37 @@ module WebAPI
   # with a single element.
   class JsonBuilder
 
-    def build(obj)
+    #:stopdoc:
+    Name               = 'WebAPI::JsonBuilder'
+    ERR_NestIsTooDeep  = "[#{Name}] Array / Hash nested too deep."
+    #:startdoc:
+
+    # Create a new instance of JsonBuilder. *options* can contain these values.
+    # [:max_nest]
+    #     If Array / Hash is nested more than this value, an exception would be thrown.
+    #     64 by default.
+    def initialize(options = {})
+      @default_max_nest = options.has_key?(:max_nest) ? options[:max_nest] : 64
+    end
+
+    # Convert *obj* to a JSON form string.
+    # [obj]
+    #     A ruby object. this object must satisfy all conditions mentioned above.
+    # [options]
+    #     Same as new.
+    def build(obj, options = {})
+      @max_nest = options.has_key?(:max_nest) ? options[:max_nest] : @default_max_nest
       case obj
-      when Array then build_array(obj)
-      when Hash  then build_object(obj)
-      else            build_array([obj])
+      when Array then build_array(obj, 0)
+      when Hash  then build_object(obj, 0)
+      else            build_array([obj], 0)
       end
     end
 
     private #---------------------------------------------------------
 
     def escape(str)
-      str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/) do |chr|
+      str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
         if chr[0] != 0 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
           "\\" + '"\\/bfnrt'[index, 1]
         else
@@ -231,23 +250,25 @@ module WebAPI
       end
     end
 
-    def build_value(obj)
+    def build_value(obj, level)
       case obj
       when Numeric, TrueClass, FalseClass then obj.to_s
       when NilClass then 'null'
-      when Array    then build_array(obj)
-      when Hash     then build_object(obj)
+      when Array    then build_array(obj, level + 1)
+      when Hash     then build_object(obj, level + 1)
       else          "\"#{escape(obj.to_s)}\""
       end
     end
 
-    def build_array(obj)
-      '[' + obj.map { |item| build_value(item) }.join(',') + ']'
+    def build_array(obj, level)
+      raise ERR_NestIsTooDeep if level >= @max_nest
+      '[' + obj.map { |item| build_value(item, level) }.join(',') + ']'
     end
 
-    def build_object(obj)
+    def build_object(obj, level)
+      raise ERR_NestIsTooDeep if level >= @max_nest
       '{' + obj.map do |item|
-        "#{build_value(item[0].to_s)}:#{build_value(item[1])}"
+        "#{build_value(item[0].to_s,level)}:#{build_value(item[1],level)}"
       end.join(',') + '}'
     end
 
