@@ -94,14 +94,18 @@ module WebAPI
           end
         elsif 0x80..0xbf === c
           code = (code << 6) | (c & 0x3f)
-          if (rest -= 1) <= 0 && (!(range === code) || (0xd800..0xdfff) === code)
-            code = handle_malformed_chr(malformed_chr)
+          if (rest -= 1) <= 0
+            if !(range === code) || (0xd800..0xdfff) === code
+              code = handle_malformed_chr(malformed_chr)
+            end
+            ucs << code
           end
-          ucs << code
         else
           ucs << handle_malformed_chr(malformed_chr)
+          rest = 0
         end
       end
+      ucs << handle_malformed_chr(malformed_chr) if rest > 0
       ucs.pack('U*')
     end
 
