@@ -131,7 +131,7 @@ module WebAPI
               seq[index] = 0x10000 + ((seq[index] & 0x03ff) << 10) + (seq[n] & 0x03ff)
               seq[n] = nil
             end
-          end.compact
+          end.compact!
         end
         seq.pack('U*')
       end
