@@ -14,135 +14,23 @@ require 'webapi/json'
 
 module WebAPI
 
+  # This class allows you to access and manipulate your del.icio.us
+  # bookmarks through JSON feed or del.icio.us API. If you provides
+  # your password to constructor, WebAPI::Delicious uses del.icio.us
+  # API to get full access to your all bookmarks. otherwise, It  uses
+  # JSON feed to obtain your public bookmarks.
   class Delicious
 
-    module Util
-      private
-      def to_str(s)
-        s ? s.to_s : ''
-      end
-      def to_tags(a)
-        case a
-        when String
-          a.split(' ')
-        when NilClass
-          []
-        else
-          a.to_a
-        end
-      end
-      def to_integer(n)
-        n ? n.to_i : 0
-      end
-    end
+    include Util
 
-    class Post
-      include Util
-      def initialize(src = nil)
-        set(src)
-      end
-      def set(src)
-        case src
-        when Hash
-          @title = src['d']
-          @url   = src['u']
-          @notes = src['n']
-          @tags  = src['t']
-          @date  = nil
-        when REXML::Element
-          @title = src.attributes['description']
-          @url   = src.attributes['href']
-          @notes = src.attributes['extended']
-          @tags  = src.attributes['tag']
-          @date  = src.attributes['time']
-        when NilClass
-          @title = @url = @notes = @tags = @date  = nil
-        else
-          raise
-        end
-        normalize!
-      end
-      def normalize!
-        @title = to_str(@title)
-        @url   = to_str(@url)
-        @notes = to_str(@notes)
-        @tags  = to_tags(@tags)
-        @date = case @date
-                when Time
-                  @date
-                when NilClass
-                  Time.now
-                else
-                  Time.iso8601(@date.to_s)
-                end
-        self
-      end
-      def normalize
-        clone.normalize!
-      end
-      attr_accessor :title, :url, :notes, :tags, :date
-    end
-
-    class Tag
-      include Util
-      def initialize(arg1 = nil, arg2 = nil)
-        set(arg1, arg2)
-      end
-      def set(arg1, arg2 = nil)
-        if arg2
-          @name  = to_str(arg1)
-          @count = to_integer(arg2)
-        else
-          case arg1
-          when Array
-            @name  = to_str(arg1[0])
-            @count = to_integer(arg2[1])
-          when REXML::Element
-            @name  = to_str(arg1.attributes['tag'])
-            @count = to_integer(arg1.attributes['count'])
-          when NilClass
-            @name  = ''
-            @count = 0
-          else
-            raise
-          end
-        end
-      end
-      attr_accessor :name, :count
-    end
-
-    class Bundle
-      include Util
-      def initialize(src = nil)
-        set(src)
-      end
-      def set(src)
-        if src
-          @name = src.attributes['name']
-          @tags = src.attributes['tags']
-        else
-          @name = @tags = nil
-        end
-        normalize!
-      end
-      def normalize!
-        @name = to_str(@name)
-        @tags = to_tags(@tags)
-        self
-      end
-      def normalize
-        clone.normalize!
-      end
-      attr_accessor :name, :tags
-    end
-
+    #:stopdoc:
     class LimiterBase
       def execute()
         yield
       end
     end
 
-    class ApiLimitter < LimiterBase
+    class ApiLimiter < LimiterBase
       def initialize(interval = 1.5)
         @interval = interval
         @release_time = Time.now
@@ -156,9 +44,24 @@ module WebAPI
       end
     end
 
-    DefaultLimiter = ApiLimitter.new
+    DefaultLimiter = ApiLimiter.new
     NullLimiter    = LimiterBase.new
+    #:startdoc:
 
+    # Create an instance of WebAPI::Delicious.
+    # [username]
+    #     Required. The login name of your del.icio.us account.
+    # [password]
+    #     Optional. The password of your del.icio.us account.
+    #     If you omit this argument, WebAPI::Delicious will use
+    #     JSON feed for query. In this case, you can access only
+    #     your public bookmarks, and some methods are not available.
+    # [limiter]
+    #     Optional. An object for managing interval of each request.
+    #     del.icio.us API client must wait at least one second
+    #     between queries or your IP address is going to be banned.
+    #     If you omit this argument, an appropriate object would be
+    #     selected automatically. See LimiterBase for details.
     def initialize(username, password = nil, limiter = nil)
       @limiter  = limiter
       @username = username.to_s
@@ -176,42 +79,47 @@ module WebAPI
       @rest     = REST.new(protocol, auth)
     end
 
+    def add_post(post, replace = true, shared = true)
+      raise unless @api_mode
+      params = {
+        'url'         => string_param(post, :url),
+        'description' => string_param(post, :title),
+        'extended'    => string_param(post, :notes),
+        'dt'          => date_param(post, :date),
+        'tags'        => tags_param(post, :tags),
+        'replace'     => replace ? nil : 'no',
+        'shared'      => shared ? nil : 'no'
+      }.delete_if do |key, value| NilClass === value end
+      doc = REXML::Document.new(http_post('/v1/posts/add', params))
+      raise unless doc.root.attributes['code'] == 'done'
+      nil
+    end
+
     def get_posts(opt = {})
       @api_mode ? get_posts_api(opt) : get_posts_json(opt)
     end
 
-    def add_post(post, replace = true, shared = true)
+    def delete_post(opt = {})
       raise unless @api_mode
-      post = post.normalize
-      params = {
-        'url' => post.url,
-        'description' => post.title,
-        'extended' => post.notes,
-        'dt' => post.date.iso8601 }
-      params['tags'] = post.tags.join(' ') if post.tags.size > 0
-      params['replace'] = 'no' unless replace
-      params['shared'] = 'no' unless shared
-      doc = REXML::Document.new(http_post('/v1/posts/add', params))
-      doc.root.attributes['code']
+      url = string_param(opt, :url)
+      params = {}
+      params['url'] = url if url
+      doc = REXML::Document.new(http_get('/v1/posts/delete', params))
+      raise unless doc.root.attributes['code'] == 'done'
+      nil
     end
 
-    def delete_post(url)
-      raise unless @api_mode
-      params = { 'url' => (url.is_a?(Post) ? url.url : url.to_s) }
-      doc = REXML::Document.new(http_post('/v1/posts/delete', params))
-      doc.root.attributes['code']
-    end
-
-    def get_tags()
+    def get_tags
       @api_mode ? get_tags_api() : get_tags_json()
     end
 
-    def get_bundles()
+    def get_bundles
       raise unless @api_mode
-      doc = REXML::Document.new(http_get('/v1/tags/bundles/all'))
-      bundles = []
-      doc.elements.each('bundles/bundle') do |element|
-        bundles << Bundle.new(element)
+      doc = REXML::Document.new(http_get('/v1/tags/bundles/all', {}))
+      bundles = {}
+      doc.elements.each('bundles/bundle') do |e|
+        name = string_result(e.attributes['name'])
+        bundles[name] = tags_result(e.attributes['tags']) if name
       end
       bundles
     end
@@ -226,52 +134,91 @@ module WebAPI
       @limiter.execute { @rest.post(url, params) }
     end
 
+    def string_param(hash, index)
+      NilClass === hash[index] ? nil : hash[index].to_s
+    end
+
+    def date_param(hash, index)
+      case hash[index]
+      when NilClass then nil
+      when Time     then hash[index].iso8601
+      else               hash[index].to_s
+      end
+    end
+
+    def tags_param(hash, index)
+      case hash[index]
+      when NilClass then nil
+      when Array    then hash[index].join(' ')
+      else               hash[index].to_s
+      end
+    end
+
+    def string_result(str)
+      str ? str.to_s : nil
+    end
+
+    def date_result(str)
+      str ? (Time === str ? str : Time.iso8601(str)) : nil
+    end
+
+    def tags_result(str)
+      str ? (Array === str ? str : str.split(' ')) : nil
+    end
+
     def get_posts_api(opt = {})
-      params = {}
-      params['tag'] = opt['tags'].join(' ') if opt['tags']
-      params['url'] = opt['url']
-      response =
-        if params['url']
-          http_get('/v1/posts/get', params)
-        else
-          http_get('/v1/posts/all', params)
-        end
+      params = {
+        'url' => string_param(opt, :url),
+        'tag' => tags_param(opt, :tags)
+      }.delete_if do |key, value| NilClass === value end
+      response = (params['url'] ?
+                  http_get('/v1/posts/get', params) :
+                    http_get('/v1/posts/all', params))
       doc = REXML::Document.new(response)
       posts = []
-      doc.elements.each('posts/post') do |element|
-        posts << Post.new(element)
+      doc.elements.each('posts/post') do |e|
+        posts << {
+          :url   => string_result(e.attributes['href']),
+          :title => string_result(e.attributes['description']),
+          :notes => string_result(e.attributes['extended']),
+          :date  => date_result(e.attributes['time']),
+          :tags  => tags_result(e.attributes['tag'])
+        }.delete_if do |key, value| NilClass === value end
       end
       posts
     end
 
-    def get_posts_json(opt)
-      tags = opt['tags'] ? '/' + opt['tags'].join(' ') : ''
-      count = opt['count'] ? opt['count'] : 100
-      url = '/feeds/json/' + @rest.urlencode(@username + tags)
-      params = { 'count' => count, 'raw' => '' }
-      JsonParser.new.parse(http_get(url, params)).map! do |post|
-        Post.new(post)
+    def get_posts_json(opt = {})
+      if opt.has_key?(:url)
+        raise "Getting posts with URL using JSON feed isn't supported yet."
+      end
+      params  = { 'count' => 100, 'raw' => '' }
+      uname   = urlencode(@username)
+      tags    = tags_param(opt, :tags)
+      request = "/feeds/json/#{uname}#{tags ? '/' + urlencode(tags) : ''}"
+      JsonParser.new.parse(http_get(request, params)).map! do |e|
+        {
+          :url   => string_result(e['u']),
+          :title => string_result(e['d']),
+          :notes => string_result(e['n']),
+          :tags  => tags_result(e['t'])
+        }.delete_if do |key, value| NilClass === value end
       end
     end
 
-    def get_tags_api()
+    def get_tags_api
       doc = REXML::Document.new(http_get('/v1/tags/get'))
-      tags = []
-      doc.elements.each('tags/tag') do |element|
-        tags << Tag.new(element)
+      tags = {}
+      doc.elements.each('tags/tag') do |e|
+        tag = string_result(e.attributes['tag'])
+        tags[tag] = string_result(e.attributes['count']).to_i if tag
       end
       tags
     end
 
-    def get_tags_json()
-      url = '/feeds/json/tags/' + @rest.urlencode(@username)
-      params = { 'atleast' => 1, 'raw' => '' }
-      json = JsonParser.new.parse(http_get(url, params))
-      result = []
-      json.each do |key, value|
-        result << Tag.new(key, value)
-      end
-      result
+    def get_tags_json
+      request = "/feeds/json/tags/#{urlencode(@username)}"
+      JsonParser.new.parse(http_get(request, { 'raw' => '' }))
     end
 
   end

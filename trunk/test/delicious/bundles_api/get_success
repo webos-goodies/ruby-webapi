@@ -1,0 +1,9 @@
+<?xml version='1.0' standalone='yes'?>
+<bundles>
+  <bundle name="opensource-apps" tags="desktop-apps dokuwiki net2ftp sitebar twiki" />
+  <bundle name="opera-firefox" tags="browser-extensions browser-news browser-tips firefox-search opera-widgets" />
+  <bundle name="others" tags="announcement gadget misc products weekly-news" />
+  <bundle name="development" tags="canvas rails subversion web-development" />
+  <bundle name="server" tags="apache bind courier gentoo gentoo-tips mysql portage-tips ssh vmware" />
+  <bundle name="web-apps" tags="google-apps-for-your-domain google-universal-gadget value-domain web-apps-news web-apps-review web-apps-tips" />
+</bundles>

@@ -1,4 +1,4 @@
-require '../webapi/json'
+require 'webapi/json'
 
 class TC_JsonParser < Test::Unit::TestCase
 

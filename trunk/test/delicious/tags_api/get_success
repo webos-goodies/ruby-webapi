@@ -1,0 +1,38 @@
+<?xml version='1.0' standalone='yes'?>
+<tags>
+  <tag count="28" tag="announcement" />
+  <tag count="9" tag="apache" />
+  <tag count="3" tag="bind" />
+  <tag count="8" tag="browser-extensions" />
+  <tag count="19" tag="browser-news" />
+  <tag count="13" tag="browser-tips" />
+  <tag count="6" tag="canvas" />
+  <tag count="4" tag="courier" />
+  <tag count="12" tag="desktop-apps" />
+  <tag count="5" tag="dokuwiki" />
+  <tag count="7" tag="firefox-search" />
+  <tag count="9" tag="gadget" />
+  <tag count="13" tag="gentoo" />
+  <tag count="7" tag="gentoo-tips" />
+  <tag count="5" tag="google-apps-for-your-domain" />
+  <tag count="14" tag="google-universal-gadget" />
+  <tag count="29" tag="misc" />
+  <tag count="8" tag="mysql" />
+  <tag count="4" tag="net2ftp" />
+  <tag count="9" tag="obsolete" />
+  <tag count="3" tag="opera-widgets" />
+  <tag count="18" tag="portage-tips" />
+  <tag count="7" tag="products" />
+  <tag count="9" tag="rails" />
+  <tag count="3" tag="sitebar" />
+  <tag count="8" tag="ssh" />
+  <tag count="6" tag="subversion" />
+  <tag count="8" tag="twiki" />
+  <tag count="6" tag="value-domain" />
+  <tag count="13" tag="vmware" />
+  <tag count="22" tag="web-apps-news" />
+  <tag count="16" tag="web-apps-review" />
+  <tag count="13" tag="web-apps-tips" />
+  <tag count="24" tag="web-development" />
+  <tag count="53" tag="weekly-news" />
+</tags>

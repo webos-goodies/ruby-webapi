@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html 
+     PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+     "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+  <title>Class: WebAPI::JsonBuilder</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta http-equiv="Content-Script-Type" content="text/javascript" />
+  <link rel="stylesheet" href="../.././rdoc-style.css" type="text/css" media="screen" />
+  <script type="text/javascript">
+  // <![CDATA[
+
+  function popupCode( url ) {
+    window.open(url, "Code", "resizable=yes,scrollbars=yes,toolbar=no,status=no,height=150,width=400")
+  }
+
+  function toggleCode( id ) {
+    if ( document.getElementById )
+      elem = document.getElementById( id );
+    else if ( document.all )
+      elem = eval( "document.all." + id );
+    else
+      return false;
+
+    elemStyle = elem.style;
+    
+    if ( elemStyle.display != "block" ) {
+      elemStyle.display = "block"
+    } else {
+      elemStyle.display = "none"
+    }
+
+    return true;
+  }
+  
+  // Make codeblocks hidden by default
+  document.writeln( "<style type=\"text/css\">div.method-source-code { display: none }</style>" )
+  
+  // ]]>
+  </script>
+
+</head>
+<body>
+
+
+
+    <div id="classHeader">
+        <table class="header-table">
+        <tr class="top-aligned-row">
+          <td><strong>Class</strong></td>
+          <td class="class-name-in-header">WebAPI::JsonBuilder</td>
+        </tr>
+        <tr class="top-aligned-row">
+            <td><strong>In:</strong></td>
+            <td>
+                <a href="../../files/webapi/json_rb.html">
+                webapi/json.rb
+                </a>
+        <br />
+            </td>
+        </tr>
+
+        <tr class="top-aligned-row">
+            <td><strong>Parent:</strong></td>
+            <td>
+                Object
+            </td>
+        </tr>
+        </table>
+    </div>
+  <!-- banner header -->
+
+  <div id="bodyContent">
+
+
+
+  <div id="contextContent">
+
+    <div id="description">
+      <h1>Simple JSON builder</h1>
+<p>
+This class converts an Ruby object to a JSON string. you can convert
+<b>ruby_obj</b> like below.
+</p>
+<pre>
+  json_str = WebAPI::JsonBuilder.new.build(ruby_obj)
+</pre>
+<p>
+<b>ruby_obj</b> must satisfy these conditions.
+</p>
+<ul>
+<li>It must support to_s method, otherwise must be an array, a hash or nil.
+
+</li>
+<li>All keys of a hash must support to_s method.
+
+</li>
+<li>All values of an array or a hash must satisfy all conditions mentioned
+above.
+
+</li>
+</ul>
+<p>
+If the <b>ruby_obj</b> is not an array or a hash, it will be converted to
+an array with a single element.
+</p>
+
+    </div>
+
+
+   </div>
+
+    <div id="method-list">
+      <h3 class="section-bar">Methods</h3>
+
+      <div class="name-list">
+      <a href="#M000003">build</a>&nbsp;&nbsp;
+      <a href="#M000002">new</a>&nbsp;&nbsp;
+      </div>
+    </div>
+
+  </div>
+
+
+    <!-- if includes -->
+
+    <div id="section">
+
+
+
+
+
+      
+
+
+    <!-- if method_list -->
+    <div id="methods">
+      <h3 class="section-bar">Public Class methods</h3>
+
+      <div id="method-M000002" class="method-detail">
+        <a name="M000002"></a>
+
+        <div class="method-heading">
+          <a href="#M000002" class="method-signature">
+          <span class="method-name">new</span><span class="method-args">(options = {})</span>
+          </a>
+        </div>
+      
+        <div class="method-description">
+          <p>
+Create a <a href="JsonBuilder.html#M000002">new</a> instance of <a
+href="JsonBuilder.html">JsonBuilder</a>. <b>options</b> can contain these
+values.
+</p>
+<dl>
+<dt>:max_nest</dt><dd>If Array / Hash is nested more than this value, an exception would be
+thrown. 64 by default.
+
+</dd>
+</dl>
+          <p><a class="source-toggle" href="#"
+            onclick="toggleCode('M000002-source');return false;">[Source]</a></p>
+          <div class="method-source-code" id="M000002-source">
+<pre>
+     <span class="ruby-comment cmt"># File webapi/json.rb, line 227</span>
+227:     <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">initialize</span>(<span class="ruby-identifier">options</span> = {})
+228:       <span class="ruby-ivar">@default_max_nest</span> = <span class="ruby-identifier">options</span>.<span class="ruby-identifier">has_key?</span>(<span class="ruby-identifier">:max_nest</span>) <span class="ruby-operator">?</span> <span class="ruby-identifier">options</span>[<span class="ruby-identifier">:max_nest</span>] <span class="ruby-operator">:</span> <span class="ruby-value">64</span>
+229:     <span class="ruby-keyword kw">end</span>
+</pre>
+          </div>
+        </div>
+      </div>
+
+      <h3 class="section-bar">Public Instance methods</h3>
+
+      <div id="method-M000003" class="method-detail">
+        <a name="M000003"></a>
+
+        <div class="method-heading">
+          <a href="#M000003" class="method-signature">
+          <span class="method-name">build</span><span class="method-args">(obj, options = {})</span>
+          </a>
+        </div>
+      
+        <div class="method-description">
+          <p>
+Convert <b>obj</b> to a JSON form string.
+</p>
+<dl>
+<dt>obj</dt><dd>A ruby object. this object must satisfy all conditions mentioned above.
+
+</dd>
+<dt>options</dt><dd>Same as <a href="JsonBuilder.html#M000002">new</a>.
+
+</dd>
+</dl>
+          <p><a class="source-toggle" href="#"
+            onclick="toggleCode('M000003-source');return false;">[Source]</a></p>
+          <div class="method-source-code" id="M000003-source">
+<pre>
+     <span class="ruby-comment cmt"># File webapi/json.rb, line 236</span>
+236:     <span class="ruby-keyword kw">def</span> <span class="ruby-identifier">build</span>(<span class="ruby-identifier">obj</span>, <span class="ruby-identifier">options</span> = {})
+237:       <span class="ruby-ivar">@max_nest</span> = <span class="ruby-identifier">options</span>.<span class="ruby-identifier">has_key?</span>(<span class="ruby-identifier">:max_nest</span>) <span class="ruby-operator">?</span> <span class="ruby-identifier">options</span>[<span class="ruby-identifier">:max_nest</span>] <span class="ruby-operator">:</span> <span class="ruby-ivar">@default_max_nest</span>
+238:       <span class="ruby-keyword kw">case</span> <span class="ruby-identifier">obj</span>
+239:       <span class="ruby-keyword kw">when</span> <span class="ruby-constant">Array</span> <span class="ruby-keyword kw">then</span> <span class="ruby-identifier">build_array</span>(<span class="ruby-identifier">obj</span>, <span class="ruby-value">0</span>)
+240:       <span class="ruby-keyword kw">when</span> <span class="ruby-constant">Hash</span>  <span class="ruby-keyword kw">then</span> <span class="ruby-identifier">build_object</span>(<span class="ruby-identifier">obj</span>, <span class="ruby-value">0</span>)
+241:       <span class="ruby-keyword kw">else</span>            <span class="ruby-identifier">build_array</span>([<span class="ruby-identifier">obj</span>], <span class="ruby-value">0</span>)
+242:       <span class="ruby-keyword kw">end</span>
+243:     <span class="ruby-keyword kw">end</span>
+</pre>
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+
+
+  </div>
+
+
+<div id="validator-badges">
+  <p><small><a href="http://validator.w3.org/check/referer">[Validate]</a></small></p>
+</div>
+
+</body>
+</html>
