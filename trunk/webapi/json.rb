@@ -34,11 +34,11 @@ module WebAPI
 
     StringRegex = /\s*"((?:\\.|[^"\\])*)"/n
     ValueRegex  = /\s*(?:
-		(true)|(false)|(null)|                  # 1:true, 2:false, 3:null
-		(?:\"((?:\\.|[^\"\\])*)\")|             # 4:String
-		([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)|  # 5:Float
-		([-+]?\d+)|                             # 6:Integer
-		(\{)|(\[))/xn                           # 7:Hash, 8:Array
+		(true)|(false)|(null)|            # 1:true, 2:false, 3:null
+		(?:\"((?:\\.|[^\"\\])*)\")|       # 4:String
+		([-+]?\d+\.\d+(?:[eE][-+]?\d+)?)| # 5:Float
+		([-+]?\d+)|                       # 6:Integer
+		(\{)|(\[))/xn                     # 7:Hash, 8:Array
     #:startdoc:
 
     # Create a new instance of JsonParser. *options* can contain these values.
@@ -218,14 +218,19 @@ module WebAPI
     #:stopdoc:
     Name               = 'WebAPI::JsonBuilder'
     ERR_NestIsTooDeep  = "[#{Name}] Array / Hash nested too deep."
+    ERR_NaN            = "[#{Name}] NaN and Infinite are not permitted in JSON."
     #:startdoc:
 
     # Create a new instance of JsonBuilder. *options* can contain these values.
     # [:max_nest]
     #     If Array / Hash is nested more than this value, an exception would be thrown.
     #     64 by default.
+    # [:nan]
+    #     NaN is replaced with this value. If nil or false, an exception will be thrown.
+    #     nil by default.
     def initialize(options = {})
       @default_max_nest = options.has_key?(:max_nest) ? options[:max_nest] : 64
+      @default_nan      = options.has_key?(:nan)      ? options[:nan]      : nil
     end
 
     # Convert *obj* to a JSON form string.
@@ -235,6 +240,7 @@ module WebAPI
     #     Same as new.
     def build(obj, options = {})
       @max_nest = options.has_key?(:max_nest) ? options[:max_nest] : @default_max_nest
+      @nan      = options.has_key?(:nan)      ? options[:nan]      : @default_nan
       case obj
       when Array then build_array(obj, 0)
       when Hash  then build_object(obj, 0)
@@ -256,7 +262,8 @@ module WebAPI
 
     def build_value(obj, level)
       case obj
-      when Numeric, TrueClass, FalseClass then obj.to_s
+      when Integer, TrueClass, FalseClass then obj.to_s
+      when Float    then raise ERR_NaN unless obj.finite? || (obj = @nan) ; obj.to_s
       when NilClass then 'null'
       when Array    then build_array(obj, level + 1)
       when Hash     then build_object(obj, level + 1)
