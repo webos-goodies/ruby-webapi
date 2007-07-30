@@ -3,11 +3,16 @@ require 'webapi/json'
 class TC_JsonParser < Test::Unit::TestCase
 
   def setup
-    @parser = WebAPI::JsonParser.new
+    @parser  = WebAPI::JsonParser.new
+    @builder = WebAPI::JsonBuilder.new
   end
 
   def parse(str, options = {})
     @parser.parse(str, options)
+  end
+
+  def build(obj, options = {})
+    @builder.build(obj, options)
   end
 
   def test_empty_array
@@ -23,14 +28,19 @@ class TC_JsonParser < Test::Unit::TestCase
   end
 
   def test_integer
-    assert_equal([15, +1, -10], parse('[15, +1 , -10]'))
+    orig   = [15, +1, -10]
+    parsed = parse('[15, +1 , -10]')
+    assert_equal(orig, parsed)
+    parsed.each do |v|
+      assert_kind_of(Integer, v)
+    end
     assert_raise(RuntimeError) { parse('[-]') }
     assert_raise(RuntimeError) { parse('[1 2]') }
   end
 
   def test_float
     assert_equal([0.5, +12.25, -3.75], parse('[0.5, +12.25 , -3.75 ]'))
-    assert_equal([0.5e2, +12.25e-3, -3.75e4], parse('[0.5e2, +12.25e-3 , -3.75e4]'))
+    assert_equal([0.5e2, +12.25e-3, -3.75e4], parse('[0.5e+2, +12.25e-3 , -3.75e4]'))
     assert_raise(RuntimeError) { parse('[.5]') }
     assert_raise(RuntimeError) { parse('[0 .5]') }
     assert_raise(RuntimeError) { parse('[- 0.5]') }
@@ -93,6 +103,15 @@ class TC_JsonParser < Test::Unit::TestCase
     end
   end
 
+  def test_nan
+    assert_raise(RuntimeError) { build([0.0/0]) }
+    assert_raise(RuntimeError) { build([1.0/0]) }
+    assert_raise(RuntimeError) { build([-1.0/0]) }
+    assert_equal('[0]', build([0.0/0], { :nan => 0 }))
+    assert_equal('[0]', build([1.0/0], { :nan => 0 }))
+    assert_equal('[0]', build([-1.0/0], { :nan => 0 }))
+  end
+
   def test_generic
 
     json1 = <<EOS
@@ -126,6 +145,7 @@ EOS
     }
 
     assert_equal(expect1, parse(json1))
+    assert_equal(expect1, parse(build(expect1)))
 
 json2 = <<EOS
 [
@@ -176,6 +196,7 @@ EOS
     ]
 
     assert_equal(expect2, parse(json2))
+    assert_equal(expect2, parse(build(expect2)))
 
   end
 
