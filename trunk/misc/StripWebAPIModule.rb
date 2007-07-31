@@ -1,28 +1,39 @@
 #! /usr/bin/ruby
 
-remove_comment = false
+def peel_module(lines)
+  lines.map do |line|
+    if /(^module WebAPI)|(^end)/ === line
+      nil
+    elsif /^  (.*)/m === line
+      $1
+    else
+      line
+    end
+  end.compact!
+end
 
-lines = $<.readlines
-
-# remove WebAPI module and adjust indent.
-lines.map! do |line|
-  if /(^module WebAPI)|(^end)/ === line
-    nil
-  elsif remove_comment && /^\s*\#/ === line
-    nil
-  elsif /^  (.*)/m === line
-    $1
-  else
-    line
+def remove_namespace(lines)
+  lines.map do |line|
+    line.gsub('WebAPI::', '')
   end
-end.compact!
-
-# remove "WebAPI::".
-lines.each do |line|
-  line.gsub!('WebAPI::', '')
 end
 
-# print results
-lines.each do |line|
-  print line
+def write_file(fname, perm, lines)
+  File.open(fname, 'w', perm) do |file|
+    lines.each do |line|
+      file.write(line)
+    end
+  end
 end
+
+# convert library
+lines = IO.readlines('../webapi/json.rb')
+lines = remove_namespace(peel_module(lines))
+write_file('SimpleJson/SimpleJson.rb', 0666, lines)
+
+# convert test
+lines = IO.readlines('../test/test_json.rb')
+lines.delete("require 'webapi/json'\n")
+lines.unshift("#! /usr/bin/ruby\n\nrequire 'test/unit'\nrequire 'SimpleJson.rb'\n")
+lines = remove_namespace(lines)
+write_file('SimpleJson/test_json.rb', 0777, lines)
