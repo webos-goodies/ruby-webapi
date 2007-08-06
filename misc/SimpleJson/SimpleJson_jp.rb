@@ -3,6 +3,7 @@
 # Author::  Chihiro Ito
 # License:: Public domain (unlike other files)
 # Support:: http://groups.google.com/group/webos-goodies/
+# Version:: 1.04
 #
 # シンプルな JSON 処理クラスです。 JsonParser は JSON 文字列を
 # 通常の配列・ハッシュに変換し、 JsonBuilder はその逆を行います。
@@ -16,12 +17,12 @@ require 'strscan'
 # = Simple JSON parser
 #
 # このクラスは JSON 文字列を配列やハッシュに変換します。
-# もし *json_str* が JSON 文字列を含んでいれば、以下のようにして
-# それを変換できます。
+# *json_str* が JSON 形式の文字列であれば、以下のようにして
+# 変換できます。
 #
 #   ruby_obj = JsonParser.new.parse(json_str)
 #
-# デフォルトでは、もし *json_str* が不正な UTF-8 シーケンスを含んでいると
+# デフォルトでは、 *json_str* が不正な UTF-8 シーケンスを含んでいると
 # 例外が発生します。この挙動は任意のユニコード文字で置き換えるように
 # 変更することも可能です。詳細は以下を参照してください。
 class JsonParser
@@ -207,6 +208,7 @@ end
 #   json_str = JsonBuilder.new.build(ruby_obj)
 #
 # *ruby_obj* は以下の条件を満たさねばなりません。
+#
 # - to_s メソッドをサポートしているか、もしくは配列・ハッシュ・ nil のいずれかでなければなりません。
 # - ハッシュの全てのキーは to_s メソッドをサポートしていなければなりません。
 # - 配列・ハッシュのすべての値は上記の条件を満たしていなければなりません。
