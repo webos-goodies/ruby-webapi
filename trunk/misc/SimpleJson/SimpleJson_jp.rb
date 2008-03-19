@@ -3,7 +3,7 @@
 # Author::  Chihiro Ito
 # License:: Public domain (unlike other files)
 # Support:: http://groups.google.com/group/webos-goodies/
-# Version:: 1.04
+# Version:: 1.05
 #
 # シンプルな JSON 処理クラスです。 JsonParser は JSON 文字列を
 # 通常の配列・ハッシュに変換し、 JsonBuilder はその逆を行います。
