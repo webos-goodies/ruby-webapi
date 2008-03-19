@@ -86,6 +86,12 @@ class TC_JsonParser < Test::Unit::TestCase
     assert_equal(['日本?'], parse('["日本語'[0..-2]+'"]', :malformed_chr => ??))
   end
 
+  def test_unexpected_firstbyte_detection
+    assert_raise(RuntimeError) { parse('["日'[0..-2] + "\xc0" + '"]') }
+    assert_raise(RuntimeError) { parse('["日'[0..-3] + "\xc0\xc0" + '"]') }
+    assert_equal(['日?語'], parse('["日本'[0..-2] + "\xc0" + '語"]', :malformed_chr => ??))
+  end
+
   def test_unexpected_secondbyte_detection
     assert_raise(RuntimeError) { parse('["日'[1..-1]+'"]') }
     assert_raise(RuntimeError) { parse('["日'+'本語'[1..-1]+'"]') }
