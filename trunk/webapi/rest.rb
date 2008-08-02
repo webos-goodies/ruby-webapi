@@ -10,6 +10,13 @@ module WebAPI
         if s == ' ' then '+' else  sprintf('%%%02x', s[0])  end
       end
     end
+    def parse_time_rfc2822(str)
+      begin
+        @date = Time.rfc2822(date) rescue Time.parse(date)
+      rescue
+        @date = nil
+      end
+    end
   end
 
   class REST
