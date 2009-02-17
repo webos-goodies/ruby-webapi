@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 require 'webapi/json'
 
 class TC_JsonParser < Test::Unit::TestCase
@@ -5,6 +7,18 @@ class TC_JsonParser < Test::Unit::TestCase
   def setup
     @parser  = WebAPI::JsonParser.new
     @builder = WebAPI::JsonBuilder.new
+  end
+
+  def b(str)
+    RUBY_VERSION >= '1.9.0' ? str.dup.force_encoding('ASCII-8BIT') : str
+  end
+
+  def c(code)
+    RUBY_VERSION >= '1.9.0' ? code.chr('ASCII-8BIT') : code.chr
+  end
+
+  def u(str)
+    RUBY_VERSION >= '1.9.0' ? str.dup.force_encoding('UTF-8') : str
   end
 
   def parse(str, options = {})
@@ -49,10 +63,10 @@ class TC_JsonParser < Test::Unit::TestCase
 
   def test_string
     [
-      [ "abc ABC", "abc ABC" ],
-      [ '日本語テキスト', '日本語テキスト'],
-      [ "\\\r\/\b\f\n\r\t", '\\\\\r\/\b\f\n\r\t' ],
-      [ '日本語テキスト', '\u65e5\u672c\u8a9e\u30c6\u30ad\u30b9\u30c8']
+      [ "1abc ABC", "1abc ABC" ],
+      [ '2日本語テキスト', '2日本語テキスト'],
+      [ "3\\\r\/\b\f\n\r\t", '3\\\\\r\/\b\f\n\r\t' ],
+      [ '4日本語テキスト', '4\\u65e5\\u672c\\u8a9e\\u30c6\\u30ad\\u30b9\\u30c8']
     ].each do |data|
       assert_equal([data[0]], parse('["' + data[1] + '"]'))
     end
@@ -80,22 +94,22 @@ class TC_JsonParser < Test::Unit::TestCase
   end
 
   def test_incomplete_sequence_detection
-    assert_raise(RuntimeError) { parse('["日'[0..-2]+'"]') }
-    assert_raise(RuntimeError) { parse('["日本語'[0..-2]+'"]') }
-    assert_raise(RuntimeError) { parse('["日本'[0..-2]+'語"]') }
-    assert_equal(['日本?'], parse('["日本語'[0..-2]+'"]', :malformed_chr => ??))
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-2]+b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日本語')[0..-2]+b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日本')[0..-2]+b('語"]'))) }
+    assert_equal(['日本?'], parse(u(b('["日本語')[0..-2]+b('"]')), :malformed_chr => ??))
   end
 
   def test_unexpected_firstbyte_detection
-    assert_raise(RuntimeError) { parse('["日'[0..-2] + "\xc0" + '"]') }
-    assert_raise(RuntimeError) { parse('["日'[0..-3] + "\xc0\xc0" + '"]') }
-    assert_equal(['日?語'], parse('["日本'[0..-2] + "\xc0" + '語"]', :malformed_chr => ??))
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-2] + c(0xc0) + b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-3] + c(0xc0) + c(0xc0) + b('"]'))) }
+    assert_equal(['日?語'], parse(u(b('["日本')[0..-2] + c(0xc0) + b('語"]')), :malformed_chr => ??))
   end
 
   def test_unexpected_secondbyte_detection
-    assert_raise(RuntimeError) { parse('["日'[1..-1]+'"]') }
-    assert_raise(RuntimeError) { parse('["日'+'本語'[1..-1]+'"]') }
-    assert_equal(['日??語'], parse('["日'+'本語'[1..-1]+'"]', :malformed_chr => ??))
+    assert_raise(RuntimeError) { parse(u(b('["日')[1..-1]+b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日')+b('本語')[1..-1]+b('"]'))) }
+    assert_equal(['日??語'], parse(u(b('["日')+b('本語')[1..-1]+b('"]')), :malformed_chr => ??))
   end
 
   def test_surrogate_pair_range_detection
@@ -125,7 +139,7 @@ class TC_JsonParser < Test::Unit::TestCase
 	"Image": {
 		"Width":  800,
 		"Height": 600,
-		"Title":  "View from 15th Floor",
+		"Title":  "View from 15th Floor \x00\\\\\\b\\f\\n\\r\\t",
 		"Thumbnail": {
 			"Url":    "http://www.example.com/image/481989943",
 			"Height": 125,
@@ -140,7 +154,7 @@ EOS
       "Image" => {
         "Width" => 800,
         "Height" => 600,
-        "Title" => "View from 15th Floor",
+        "Title" => "View from 15th Floor \u0000\\\b\f\n\r\t",
         "Thumbnail" => {
           "Url" => "http://www.example.com/image/481989943",
           "Height" => 125,
@@ -160,7 +174,7 @@ json2 = <<EOS
 		"Latitude":  37.7668,
 		"Longitude": -122.3959,
 		"Address":   "",
-		"City":      "SAN FRANCISCO",
+		"City":      "東京都台東区",
 		"State":     "CA",
 		"Zip":       "94107",
 		"Country":   "US"
@@ -184,7 +198,7 @@ EOS
 		"Latitude" =>  37.7668,
 		"Longitude" => -122.3959,
 		"Address" =>   "",
-		"City" =>      "SAN FRANCISCO",
+		"City" =>      "東京都台東区",
 		"State" =>     "CA",
 		"Zip" =>       "94107",
 		"Country" =>   "US"

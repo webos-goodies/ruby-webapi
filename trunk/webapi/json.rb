@@ -27,6 +27,7 @@ module WebAPI
   class JsonParser
 
     #:stopdoc:
+    RUBY19             = RUBY_VERSION >= '1.9.0'
     Debug              = false
     Name               = 'WebAPI::JsonParser'
     ERR_IllegalSyntax  = "[#{Name}] Syntax error"
@@ -65,7 +66,15 @@ module WebAPI
       @enable_validation = options.has_key?(:validation)    ? options[:validation]    : @default_validation
       @enable_surrogate  = options.has_key?(:surrogate)     ? options[:surrogate]     : @default_surrogate
       @malformed_chr     = options.has_key?(:malformed_chr) ? options[:malformed_chr] : @default_malformed_chr
-      @malformed_chr = @malformed_chr[0] if String === @malformed_chr
+      @malformed_chr = @malformed_chr[0].ord if String === @malformed_chr
+      if RUBY19
+        str = (str.encode('UTF-8') rescue str.dup)
+        if @enable_validation && !@malformed_chr
+          raise err_msg(ERR_IllegalUnicode) unless str.valid_encoding?
+          @enable_validation = false
+        end
+        str.force_encoding('ASCII-8BIT')
+      end
       @scanner = StringScanner.new(str)
       obj = case get_symbol[0]
             when ?{ then parse_hash
@@ -136,7 +145,7 @@ module WebAPI
         seq.pack('U*')
       end
       str = validate_string(str, @malformed_chr) if @enable_validation
-      str
+      RUBY19 ? str.force_encoding('UTF-8') : str
     end
 
     def get_symbol
@@ -216,6 +225,7 @@ module WebAPI
   class JsonBuilder
 
     #:stopdoc:
+    RUBY19             = RUBY_VERSION >= '1.9.0'
     Name               = 'WebAPI::JsonBuilder'
     ERR_NestIsTooDeep  = "[#{Name}] Array / Hash nested too deep."
     ERR_NaN            = "[#{Name}] NaN and Infinite are not permitted in JSON."
@@ -251,13 +261,15 @@ module WebAPI
     private #---------------------------------------------------------
 
     def escape(str)
-      str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
-        if chr[0] != 0 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
+      str.force_encoding('ASCII-8BIT') if RUBY19
+      str.gsub!(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
+        if chr[0] != ?\x00 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
           "\\" + '"\\/bfnrt'[index, 1]
         else
-          sprintf("\\u%04x", chr[0])
+          sprintf("\\u%04x", chr[0].ord)
         end
       end
+      RUBY19 ? str.force_encoding('UTF-8') : str
     end
 
     def build_value(obj, level)
@@ -267,7 +279,8 @@ module WebAPI
       when NilClass then 'null'
       when Array    then build_array(obj, level + 1)
       when Hash     then build_object(obj, level + 1)
-      else          "\"#{escape(obj.to_s)}\""
+      when String   then "\"#{escape(RUBY19 ? obj.encode('UTF-8') : obj.dup)}\""
+      else               "\"#{escape(obj.to_s)}\""
       end
     end
 
