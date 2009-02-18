@@ -132,6 +132,16 @@ class TC_JsonParser < Test::Unit::TestCase
     assert_equal('[0]', build([-1.0/0], { :nan => 0 }))
   end
 
+  def test_escape
+    test = build(["\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f" +
+                  "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f" +
+                  "\x22\x5c"])
+    expect = ('["\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000B\f\r\u000E\u000F' +
+              '\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018' +
+              '\u0019\u001A\u001B\u001C\u001D\u001E\u001F\\"\\\\"]')
+    assert_equal(expect, test)
+  end
+
   def test_generic
 
     json1 = <<EOS
@@ -139,7 +149,7 @@ class TC_JsonParser < Test::Unit::TestCase
 	"Image": {
 		"Width":  800,
 		"Height": 600,
-		"Title":  "View from 15th Floor \x00\\\\\\b\\f\\n\\r\\t",
+		"Title":  "View from 15th Floor \x01\\\\\\b\\f\\n\\r\\t",
 		"Thumbnail": {
 			"Url":    "http://www.example.com/image/481989943",
 			"Height": 125,
@@ -154,7 +164,7 @@ EOS
       "Image" => {
         "Width" => 800,
         "Height" => 600,
-        "Title" => "View from 15th Floor \u0000\\\b\f\n\r\t",
+        "Title" => "View from 15th Floor \x01\\\b\f\n\r\t",
         "Thumbnail" => {
           "Url" => "http://www.example.com/image/481989943",
           "Height" => 125,

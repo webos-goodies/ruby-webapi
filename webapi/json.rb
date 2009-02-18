@@ -260,16 +260,24 @@ module WebAPI
 
     private #---------------------------------------------------------
 
-    def escape(str)
-      str.force_encoding('ASCII-8BIT') if RUBY19
-      str.gsub!(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
-        if chr[0] != ?\x00 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
-          "\\" + '"\\/bfnrt'[index, 1]
-        else
-          sprintf("\\u%04x", chr[0].ord)
-        end
+    if RUBY19
+      ESCAPE_CONVERSION = { 'x' => '\u00', 'a' => '\u0007', 'v' => '\u000B', 'e' => '\u001B' }
+      def escape(str)
+        str = str.to_s.encode('UTF-8').inspect
+        str.gsub!(/\\([xave])/u){ ESCAPE_CONVERSION[$1] }
+        str
       end
-      RUBY19 ? str.force_encoding('UTF-8') : str
+    else
+      def escape(str)
+        str = str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
+          if chr[0] != 0 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
+            "\\" + '"\\/bfnrt'[index, 1]
+          else
+            sprintf("\\u%04X", chr[0])
+          end
+        end
+        "\"#{str}\""
+      end
     end
 
     def build_value(obj, level)
@@ -279,8 +287,7 @@ module WebAPI
       when NilClass then 'null'
       when Array    then build_array(obj, level + 1)
       when Hash     then build_object(obj, level + 1)
-      when String   then "\"#{escape(RUBY19 ? obj.encode('UTF-8') : obj.dup)}\""
-      else               "\"#{escape(obj.to_s)}\""
+      else               escape(obj)
       end
     end
 
