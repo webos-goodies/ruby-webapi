@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
+
 # = Simple JSON parser & builder
 #
 # Author::  Chihiro Ito
 # License:: Public domain (unlike other files)
 # Support:: http://groups.google.com/group/webos-goodies/
-# Version:: 1.05
+# Version:: 1.07
 #
 # シンプルな JSON 処理クラスです。 JsonParser は JSON 文字列を
 # 通常の配列・ハッシュに変換し、 JsonBuilder はその逆を行います。
@@ -12,7 +14,6 @@
 # 検査機能があり、一部のセキュリティー攻撃を防ぐことができます。
 
 require 'strscan'
-
 
 # = Simple JSON parser
 #
@@ -28,6 +29,7 @@ require 'strscan'
 class JsonParser
 
   #:stopdoc:
+  RUBY19             = RUBY_VERSION >= '1.9.0'
   Debug              = false
   Name               = 'JsonParser'
   ERR_IllegalSyntax  = "[#{Name}] Syntax error"
@@ -66,7 +68,15 @@ class JsonParser
     @enable_validation = options.has_key?(:validation)    ? options[:validation]    : @default_validation
     @enable_surrogate  = options.has_key?(:surrogate)     ? options[:surrogate]     : @default_surrogate
     @malformed_chr     = options.has_key?(:malformed_chr) ? options[:malformed_chr] : @default_malformed_chr
-    @malformed_chr = @malformed_chr[0] if String === @malformed_chr
+    @malformed_chr = @malformed_chr[0].ord if String === @malformed_chr
+    if RUBY19
+      str = (str.encode('UTF-8') rescue str.dup)
+      if @enable_validation && !@malformed_chr
+        raise err_msg(ERR_IllegalUnicode) unless str.valid_encoding?
+        @enable_validation = false
+      end
+      str.force_encoding('ASCII-8BIT')
+    end
     @scanner = StringScanner.new(str)
     obj = case get_symbol[0]
           when ?{ then parse_hash
@@ -137,7 +147,7 @@ class JsonParser
       seq.pack('U*')
     end
     str = validate_string(str, @malformed_chr) if @enable_validation
-    str
+    RUBY19 ? str.force_encoding('UTF-8') : str
   end
 
   def get_symbol
@@ -217,6 +227,7 @@ end
 class JsonBuilder
 
   #:stopdoc:
+  RUBY19             = RUBY_VERSION >= '1.9.0'
   Name               = 'JsonBuilder'
   ERR_NestIsTooDeep  = "[#{Name}] Array / Hash nested too deep."
   ERR_NaN            = "[#{Name}] NaN and Infinite are not permitted in JSON."
@@ -251,13 +262,24 @@ class JsonBuilder
 
   private #---------------------------------------------------------
 
-  def escape(str)
-    str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
-      if chr[0] != 0 && (index = "\"\\/\b\f\n\r\t".index(chr[0]))
-        "\\" + '"\\/bfnrt'[index, 1]
-      else
-        sprintf("\\u%04x", chr[0])
+  if RUBY19
+    ESCAPE_CONVERSION = { '\x' => '\u00', '\a' => '\u0007', '\v' => '\u000B', '\e' => '\u001B' }
+    def escape(str)
+      str = str.to_s.encode('UTF-8').inspect
+      str.gsub!(/\\[xave]/u){|s| ESCAPE_CONVERSION[s] }
+      str
+    end
+  else
+    ESCAPE_CONVERSION = ['\"', '\\\\', '\/', '\b', '\f', '\n', '\r', '\t']
+    def escape(str)
+      str = str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
+        if index = "\"\\/\b\f\n\r\t".index(chr[0])
+          ESCAPE_CONVERSION[index]
+        else
+          sprintf("\\u%04X", chr[0])
+        end
       end
+      "\"#{str}\""
     end
   end
 
@@ -268,7 +290,7 @@ class JsonBuilder
     when NilClass then 'null'
     when Array    then build_array(obj, level + 1)
     when Hash     then build_object(obj, level + 1)
-    else          "\"#{escape(obj.to_s)}\""
+    else               escape(obj)
     end
   end
 
