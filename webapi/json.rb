@@ -261,16 +261,16 @@ module WebAPI
     private #---------------------------------------------------------
 
     if RUBY19
-      ESCAPE_CONVERSION = { '\x' => '\u00', '\a' => '\u0007', '\v' => '\u000B', '\e' => '\u001B' }
+      ESCAPE_CONVERSION = { '\x' => '\u00', '\a' => '\u0007', '\v' => '\u000B', '\e' => '\u001B', '/' => '\/' }
       def escape(str)
         str = str.to_s.encode('UTF-8').inspect
-        str.gsub!(/\\[xave]/u){|s| ESCAPE_CONVERSION[s] }
+        str.gsub!(/\\[xave]|\//u){|s| ESCAPE_CONVERSION[s] }
         str
       end
     else
       ESCAPE_CONVERSION = ['\"', '\\\\', '\/', '\b', '\f', '\n', '\r', '\t']
       def escape(str)
-        str = str.gsub(/[^\x20-\x21\x23-\x5b\x5d-\xff]/n) do |chr|
+        str = str.gsub(/[^\x20-\x21\x23-\x2e\x30-\x5b\x5d-\xff]/n) do |chr|
           if index = "\"\\/\b\f\n\r\t".index(chr[0])
             ESCAPE_CONVERSION[index]
           else
