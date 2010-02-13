@@ -1,5 +1,11 @@
 #! /usr/bin/ruby
 
+def remove_comments(lines)
+  lines.map do |line|
+    /^\s*#/ === line ? nil : line
+  end.compact
+end
+
 def peel_module(lines)
   lines.map do |line|
     if /(^module WebAPI)|(^end)/ === line
@@ -9,7 +15,7 @@ def peel_module(lines)
     else
       line
     end
-  end.compact!
+  end.compact
 end
 
 def remove_namespace(lines)
@@ -28,7 +34,7 @@ end
 
 # convert library
 lines = IO.readlines('../webapi/json.rb')
-lines = remove_namespace(peel_module(lines))
+lines = remove_namespace(peel_module(remove_comments(lines)))
 write_file('SimpleJson/SimpleJson.rb', 0666, lines)
 
 # convert test
