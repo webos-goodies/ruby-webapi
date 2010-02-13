@@ -11,6 +11,7 @@
 # functionality so you can avoid some kind of security attack.
 
 require 'strscan'
+require 'json' if RUBY_VERSION >= '1.9.0'
 
 module WebAPI
 
@@ -51,10 +52,13 @@ module WebAPI
     #     An invalid sequence in JSON string will be replaced with this value.
     #     If set to nil, An exception will be thrown in this situation.
     #     nil by default.
+    # [:compatible]
+    #     If set to true, Ruby1.9's JSON module is never used. false by default.
     def initialize(options = {})
       @default_validation    = options.has_key?(:validation)    ? options[:validation]    : true
       @default_surrogate     = options.has_key?(:surrogate)     ? options[:surrogate]     : true
       @default_malformed_chr = options.has_key?(:malformed_chr) ? options[:malformed_chr] : nil
+      @default_compatible    = options.has_key?(:compatible)    ? options[:compatible]    : false
     end
 
     # Convert *str* to an array or hash.
@@ -66,12 +70,22 @@ module WebAPI
       @enable_validation = options.has_key?(:validation)    ? options[:validation]    : @default_validation
       @enable_surrogate  = options.has_key?(:surrogate)     ? options[:surrogate]     : @default_surrogate
       @malformed_chr     = options.has_key?(:malformed_chr) ? options[:malformed_chr] : @default_malformed_chr
+      @compatible        = options.has_key?(:compatible)    ? options[:compatible]    : @default_compatible
       @malformed_chr = @malformed_chr[0].ord if String === @malformed_chr
       if RUBY19
         str = (str.encode('UTF-8') rescue str.dup)
         if @enable_validation && !@malformed_chr
           raise err_msg(ERR_IllegalUnicode) unless str.valid_encoding?
           @enable_validation = false
+        end
+        if !@enable_validation && @enable_surrogate && !@malformed_chr && !@compatible
+          begin
+            return JSON.parse(str, :max_nesting => false)
+          rescue JSON::JSONError => e
+            exception = RuntimeError.new(e.message)
+            exception.set_backtrace(e.backtrace)
+            raise exception
+          end
         end
         str.force_encoding('ASCII-8BIT')
       end
@@ -234,12 +248,12 @@ module WebAPI
     # Create a new instance of JsonBuilder. *options* can contain these values.
     # [:max_nest]
     #     If Array / Hash is nested more than this value, an exception would be thrown.
-    #     64 by default.
+    #     19 by default.
     # [:nan]
     #     NaN is replaced with this value. If nil or false, an exception will be thrown.
     #     nil by default.
     def initialize(options = {})
-      @default_max_nest = options.has_key?(:max_nest) ? options[:max_nest] : 64
+      @default_max_nest = options.has_key?(:max_nest) ? options[:max_nest] : 19
       @default_nan      = options.has_key?(:nan)      ? options[:nan]      : nil
     end
 
@@ -251,31 +265,47 @@ module WebAPI
     def build(obj, options = {})
       @max_nest = options.has_key?(:max_nest) ? options[:max_nest] : @default_max_nest
       @nan      = options.has_key?(:nan)      ? options[:nan]      : @default_nan
-      case obj
-      when Array then build_array(obj, 0)
-      when Hash  then build_object(obj, 0)
-      else            build_array([obj], 0)
+      if RUBY19 && !@nan
+        begin
+          JSON.generate(obj, :max_nesting => @max_nest, :check_circular => false)
+        rescue JSON::JSONError => e
+          exception = RuntimeError.new(e.message)
+          exception.set_backtrace(e.backtrace)
+          raise exception
+        end
+      else
+        case obj
+        when Array then build_array(obj, 0)
+        when Hash  then build_object(obj, 0)
+        else            build_array([obj], 0)
+        end
       end
     end
 
     private #---------------------------------------------------------
 
+    ESCAPE_CONVERSION = {
+      '"'    => '\"', '\\'   => '\\\\', '/'    => '\/', "\x08" => '\b',
+      "\x0c" => '\f', "\x0a" => '\n',   "\x0d" => '\r', "\x09" => '\t'
+    }
     if RUBY19
-      ESCAPE_CONVERSION = { '\x' => '\u00', '\a' => '\u0007', '\v' => '\u000B', '\e' => '\u001B', '/' => '\/' }
       def escape(str)
-        str = str.to_s.encode('UTF-8').inspect
-        str.gsub!(/\\[xave]|\//u){|s| ESCAPE_CONVERSION[s] }
-        str
+        str = str.to_s.encode('UTF-8')
+        str.force_encoding('ASCII-8BIT')
+        str = str.gsub(/[^\x20-\x21\x23-\x2e\x30-\x5b\x5d-\xff]/n) do |chr|
+          escaped = ESCAPE_CONVERSION[chr]
+          escaped = sprintf("\\u%04X", chr[0].ord) unless escaped
+          escaped
+        end
+        str.force_encoding('UTF-8')
+        "\"#{str}\""
       end
     else
-      ESCAPE_CONVERSION = ['\"', '\\\\', '\/', '\b', '\f', '\n', '\r', '\t']
       def escape(str)
         str = str.gsub(/[^\x20-\x21\x23-\x2e\x30-\x5b\x5d-\xff]/n) do |chr|
-          if index = "\"\\/\b\f\n\r\t".index(chr[0])
-            ESCAPE_CONVERSION[index]
-          else
-            sprintf("\\u%04X", chr[0])
-          end
+          escaped = ESCAPE_CONVERSION[chr]
+          escaped = sprintf("\\u%04x", chr[0]) unless escaped
+          escaped
         end
         "\"#{str}\""
       end

@@ -42,23 +42,31 @@ class TC_JsonParser < Test::Unit::TestCase
   end
 
   def test_integer
-    orig   = [15, +1, -10]
-    parsed = parse('[15, +1 , -10]')
+    orig   = [15, 1, -10]
+    parsed = parse('[15, 1 , -10]')
     assert_equal(orig, parsed)
     parsed.each do |v|
       assert_kind_of(Integer, v)
     end
     assert_raise(RuntimeError) { parse('[-]') }
     assert_raise(RuntimeError) { parse('[1 2]') }
+    assert_raise(RuntimeError) { parse('[-]', :compatible => true) }
+    assert_raise(RuntimeError) { parse('[1 2]', :compatible => true) }
   end
 
   def test_float
-    assert_equal([0.5, +12.25, -3.75], parse('[0.5, +12.25 , -3.75 ]'))
-    assert_equal([0.5e2, +12.25e-3, -3.75e4], parse('[0.5e+2, +12.25e-3 , -3.75e4]'))
+    assert_equal([0.5, 12.25, -3.75], parse('[0.5, 12.25 , -3.75 ]'))
+    assert_equal([0.5e2, 12.25e-3, -3.75e4], parse('[0.5e+2, 12.25e-3 , -3.75e4]'))
     assert_raise(RuntimeError) { parse('[.5]') }
     assert_raise(RuntimeError) { parse('[0 .5]') }
     assert_raise(RuntimeError) { parse('[- 0.5]') }
     assert_raise(RuntimeError) { parse('[0.5 e3]') }
+    assert_equal([0.5, +12.25, -3.75], parse('[0.5, +12.25 , -3.75 ]', :compatible => true))
+    assert_equal([0.5e2, +12.25e-3, -3.75e4], parse('[0.5e+2, +12.25e-3 , -3.75e4]', :compatible => true))
+    assert_raise(RuntimeError) { parse('[.5]', :compatible => true) }
+    assert_raise(RuntimeError) { parse('[0 .5]', :compatible => true) }
+    assert_raise(RuntimeError) { parse('[- 0.5]', :compatible => true) }
+    assert_raise(RuntimeError) { parse('[0.5 e3]', :compatible => true) }
   end
 
   def test_string
@@ -69,6 +77,7 @@ class TC_JsonParser < Test::Unit::TestCase
       [ '4日本語テキスト', '4\\u65e5\\u672c\\u8a9e\\u30c6\\u30ad\\u30b9\\u30c8']
     ].each do |data|
       assert_equal([data[0]], parse('["' + data[1] + '"]'))
+      assert_equal([data[0]], parse('["' + data[1] + '"]', :compatible => true))
     end
   end
 
@@ -83,6 +92,7 @@ class TC_JsonParser < Test::Unit::TestCase
         json << sprintf('\\u%04x\\u%04X', hi+0xd800, lo+0xdc00)
       end
       assert_equal([expect.join(' ')], parse('["' + json.join(' ') + '"]'))
+      assert_equal([expect.join(' ')], parse('["' + json.join(' ') + '"]', :compatible => true))
     end
   end
 
@@ -90,6 +100,9 @@ class TC_JsonParser < Test::Unit::TestCase
     assert_raise(RuntimeError) { parse("[\"\xc0\xbc\"]") }
     assert_raise(RuntimeError) { parse("[\"\xe0\x80\xbc\"]") }
     assert_raise(RuntimeError) { parse("[\"\xf0\x80\x80\xbc\"]") }
+    assert_raise(RuntimeError) { parse("[\"\xc0\xbc\"]",         :compatible => true) }
+    assert_raise(RuntimeError) { parse("[\"\xe0\x80\xbc\"]",     :compatible => true) }
+    assert_raise(RuntimeError) { parse("[\"\xf0\x80\x80\xbc\"]", :compatible => true) }
     assert_equal(['? ? ?'], parse("[\"\xc0\xbc \xe0\x80\xbc \xf0\x80\x80\xbc\"]", :malformed_chr => ?? ))
   end
 
@@ -97,18 +110,25 @@ class TC_JsonParser < Test::Unit::TestCase
     assert_raise(RuntimeError) { parse(u(b('["日')[0..-2]+b('"]'))) }
     assert_raise(RuntimeError) { parse(u(b('["日本語')[0..-2]+b('"]'))) }
     assert_raise(RuntimeError) { parse(u(b('["日本')[0..-2]+b('語"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-2]+b('"]')),    :compatible => true) }
+    assert_raise(RuntimeError) { parse(u(b('["日本語')[0..-2]+b('"]')), :compatible => true) }
+    assert_raise(RuntimeError) { parse(u(b('["日本')[0..-2]+b('語"]')), :compatible => true) }
     assert_equal(['日本?'], parse(u(b('["日本語')[0..-2]+b('"]')), :malformed_chr => ??))
   end
 
   def test_unexpected_firstbyte_detection
     assert_raise(RuntimeError) { parse(u(b('["日')[0..-2] + c(0xc0) + b('"]'))) }
     assert_raise(RuntimeError) { parse(u(b('["日')[0..-3] + c(0xc0) + c(0xc0) + b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-2] + c(0xc0) + b('"]')), :compatible => true) }
+    assert_raise(RuntimeError) { parse(u(b('["日')[0..-3] + c(0xc0) + c(0xc0) + b('"]')), :compatible => true) }
     assert_equal(['日?語'], parse(u(b('["日本')[0..-2] + c(0xc0) + b('語"]')), :malformed_chr => ??))
   end
 
   def test_unexpected_secondbyte_detection
     assert_raise(RuntimeError) { parse(u(b('["日')[1..-1]+b('"]'))) }
     assert_raise(RuntimeError) { parse(u(b('["日')+b('本語')[1..-1]+b('"]'))) }
+    assert_raise(RuntimeError) { parse(u(b('["日')[1..-1]+b('"]')), :compatible => true) }
+    assert_raise(RuntimeError) { parse(u(b('["日')+b('本語')[1..-1]+b('"]')), :compatible => true) }
     assert_equal(['日??語'], parse(u(b('["日')+b('本語')[1..-1]+b('"]')), :malformed_chr => ??))
   end
 
@@ -133,13 +153,14 @@ class TC_JsonParser < Test::Unit::TestCase
   end
 
   def test_escape
-    test = build(["\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f" +
-                  "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f" +
-                  "\x22\x2f\x5c"])
-    expect = ('["\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000B\f\r\u000E\u000F' +
+    source = ["\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f" +
+              "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f" +
+              "\x22\x2f\x5c"]
+    expect = ('["\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f' +
               '\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018' +
-              '\u0019\u001A\u001B\u001C\u001D\u001E\u001F\\"\\/\\\\"]')
-    assert_equal(expect, test)
+              '\u0019\u001a\u001b\u001c\u001d\u001e\u001f\\"\\/\\\\"]')
+    assert_equal(expect, build(source).downcase)
+    assert_equal(expect, build(source, { :nan => 0 }).downcase)
   end
 
   def test_generic
@@ -149,7 +170,7 @@ class TC_JsonParser < Test::Unit::TestCase
 	"Image": {
 		"Width":  800,
 		"Height": 600,
-		"Title":  "View from 15th Floor \x01\\\\\\b\\f\\n\\r\\t\\/",
+		"Title":  "View from 15th Floor \x01\\\\\\b\\f\\n\\r\\t",
 		"Thumbnail": {
 			"Url":    "http://www.example.com/image/481989943",
 			"Height": 125,
@@ -164,7 +185,7 @@ EOS
       "Image" => {
         "Width" => 800,
         "Height" => 600,
-        "Title" => "View from 15th Floor \x01\\\b\f\n\r\t/",
+        "Title" => "View from 15th Floor \x01\\\b\f\n\r\t",
         "Thumbnail" => {
           "Url" => "http://www.example.com/image/481989943",
           "Height" => 125,
@@ -174,8 +195,8 @@ EOS
       }
     }
 
-    assert_equal(expect1, parse(json1))
-    assert_equal(expect1, parse(build(expect1)))
+    assert_equal(expect1, parse(json1, :compatible => true))
+    assert_equal(expect1, parse(build(expect1), :compatible => true))
 
 json2 = <<EOS
 [
