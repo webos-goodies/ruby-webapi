@@ -1,0 +1,1 @@
+Ruby WebAPI library (will) allows you to access HTTP based API such as REST and Atom API easily. This project just started so nothing is there. Please wait a few month... :)
